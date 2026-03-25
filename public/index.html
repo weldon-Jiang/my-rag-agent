@@ -10,6 +10,11 @@
     <div class="container">
         <header>
             <h1>🤖 本地知识库智能体</h1>
+            <div class="theme-switcher">
+                <button class="theme-btn active" data-theme="system">跟随系统</button>
+                <button class="theme-btn" data-theme="light">浅色</button>
+                <button class="theme-btn" data-theme="dark">深色</button>
+            </div>
         </header>
 
         <div class="main-content">
@@ -98,6 +103,12 @@
                         <div class="form-group">
                             <label for="modalModelProvider">供应商</label>
                             <input type="text" id="modalModelProvider" placeholder="请输入供应商">
+                        </div>
+                        <div class="form-group">
+                            <label for="modalModelPublished">
+                                <input type="checkbox" id="modalModelPublished" checked>
+                                发布状态（勾选后可在对话中使用）
+                            </label>
                         </div>
                         <div class="modal-buttons">
                             <button id="saveModelBtn" class="save-btn">保存</button>

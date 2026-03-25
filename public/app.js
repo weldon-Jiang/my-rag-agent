@@ -13,9 +13,55 @@ document.addEventListener('DOMContentLoaded', () => {
     setupDropzone();
     setupChatInput();
     setupModelModal();
+    initTheme();
 });
 
+function initTheme() {
+    const saved = localStorage.getItem('theme') || 'system';
+    applyTheme(saved);
+    updateThemeButtons();
+
+    window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', (e) => {
+        const currentTheme = localStorage.getItem('theme') || 'system';
+        if (currentTheme === 'system') {
+            applyTheme('system');
+        }
+    });
+}
+
+function applyTheme(theme) {
+    if (theme === 'system') {
+        const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+        document.documentElement.setAttribute('data-theme', prefersDark ? 'dark' : 'light');
+    } else {
+        document.documentElement.setAttribute('data-theme', theme);
+    }
+    localStorage.setItem('theme', theme);
+}
+
+function updateThemeButtons() {
+    const saved = localStorage.getItem('theme') || 'system';
+    document.querySelectorAll('.theme-btn').forEach(btn => {
+        btn.classList.remove('active');
+        if (btn.dataset.theme === saved) {
+            btn.classList.add('active');
+        }
+    });
+}
+
+function setupThemeSwitcher() {
+    document.querySelectorAll('.theme-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const theme = btn.dataset.theme;
+            applyTheme(theme);
+            updateThemeButtons();
+        });
+    });
+}
+
 function setupEventListeners() {
+    setupThemeSwitcher();
+
     document.getElementById('sendBtn').addEventListener('click', sendMessage);
     document.getElementById('openAddModelModalBtn')?.addEventListener('click', openAddModelModal);
     document.getElementById('uploadBtn')?.addEventListener('click', () => {
@@ -23,7 +69,7 @@ function setupEventListeners() {
             uploadSelectedFiles();
         }
     });
-    
+
     document.querySelectorAll('.mode-btn').forEach(btn => {
         btn.addEventListener('click', () => {
             selectedMode = btn.dataset.mode;
@@ -259,41 +305,46 @@ async function deleteFile(filename) {
 async function loadModels() {
     try {
         const response = await fetch('/api/models');
-        currentModels = await response.json();
-        
-        if (!selectedModel) {
-            const minimaxModel = currentModels.find(m => m.id === 'minimax-m2.5');
+        const allModels = await response.json();
+        currentModels = allModels;
+
+        const publishedResponse = await fetch('/api/models/published');
+        const publishedModels = await publishedResponse.json();
+        const publishedIds = publishedModels.map(m => m.id);
+
+        if (!selectedModel || !publishedIds.includes(selectedModel)) {
+            const minimaxModel = publishedModels.find(m => m.id === 'minimax-m2.5');
             if (minimaxModel) {
                 selectedModel = minimaxModel.id;
-            } else if (currentModels.length > 0) {
-                selectedModel = currentModels[0].id;
+            } else if (publishedModels.length > 0) {
+                selectedModel = publishedModels[0].id;
             }
         }
-        
+
         renderModelsList();
-        renderModelSelect();
+        renderModelSelect(publishedModels);
     } catch (error) {
         console.error('加载模型失败:', error);
     }
 }
 
-function renderModelSelect() {
+function renderModelSelect(publishedModels) {
     const wrapper = document.getElementById('modelSelectWrapper');
     if (!wrapper) return;
-    
+
     const groupedModels = {};
     const defaultProviders = ['OpenAI', 'Ollama'];
-    
-    currentModels.forEach(model => {
+
+    publishedModels.forEach(model => {
         if (!groupedModels[model.provider]) {
             groupedModels[model.provider] = [];
         }
         groupedModels[model.provider].push(model);
     });
-    
+
     const customProviders = Object.keys(groupedModels).filter(p => !defaultProviders.includes(p));
     const allProviders = [...customProviders, ...defaultProviders];
-    
+
     let html = `
         <div class="models-dropdown">
             <div class="models-dropdown-toggle" onclick="toggleModelDropdown()">
@@ -302,17 +353,17 @@ function renderModelSelect() {
             </div>
             <div class="models-dropdown-menu" id="modelDropdownMenu">
     `;
-    
+
     allProviders.forEach(provider => {
         if (!groupedModels[provider]) return;
-        
+
         html += `
             <div class="model-group">
                 <div class="model-group-title">${provider}</div>
                 ${groupedModels[provider].map(model => `
-                    <div class="model-option ${model.id === selectedModel ? 'selected' : ''}" 
+                    <div class="model-option ${model.id === selectedModel ? 'selected' : ''}"
                          onclick="selectModel('${model.id}')">
-                        <input type="radio" name="model" value="${model.id}" 
+                        <input type="radio" name="model" value="${model.id}"
                                ${model.id === selectedModel ? 'checked' : ''}>
                         <span>${model.name}</span>
                     </div>
@@ -320,7 +371,7 @@ function renderModelSelect() {
             </div>
         `;
     });
-    
+
     html += '</div></div>';
     wrapper.innerHTML = html;
 }
@@ -336,12 +387,22 @@ document.addEventListener('DOMContentLoaded', () => {
 
 function toggleModelDropdown() {
     const menu = document.getElementById('modelDropdownMenu');
+    const toggle = document.querySelector('.models-dropdown-toggle');
     menu?.classList.toggle('open');
+    toggle?.classList.toggle('active');
 }
 
 function selectModel(modelId) {
     selectedModel = modelId;
-    renderModelSelect();
+    const modelName = getSelectedModelName();
+    const nameSpan = document.getElementById('selectedModelName');
+    if (nameSpan) {
+        nameSpan.textContent = modelName;
+    }
+    const menu = document.getElementById('modelDropdownMenu');
+    const toggle = document.querySelector('.models-dropdown-toggle');
+    menu?.classList.remove('open');
+    toggle?.classList.remove('active');
 }
 
 function getSelectedModelName() {
@@ -352,16 +413,21 @@ function getSelectedModelName() {
 function renderModelsList() {
     const list = document.getElementById('modelsList');
     if (!list) return;
-    
+
     list.innerHTML = '';
-    
+
     currentModels.forEach(model => {
         const card = document.createElement('div');
         card.className = 'model-card';
+        const isPublished = model.published !== false;
+        const publishedText = isPublished ? '已发布' : '未发布';
+        const publishedClass = isPublished ? 'published' : 'unpublished';
+        const toggleBtnText = isPublished ? '下架' : '发布';
         card.innerHTML = `
             <div class="model-card-header">
                 <div class="model-card-name">${model.name}</div>
                 <div class="model-card-actions">
+                    <button class="toggle-btn" onclick="toggleModelPublished('${model.id}')">${toggleBtnText}</button>
                     <button class="edit-btn" onclick="editModel('${model.id}')">编辑</button>
                     <button class="delete-btn" onclick="deleteModel('${model.id}')">删除</button>
                 </div>
@@ -370,6 +436,7 @@ function renderModelsList() {
                 <div><strong>ID:</strong> ${model.id}</div>
                 <div><strong>供应商:</strong> ${model.provider}</div>
                 <div><strong>类型:</strong> ${model.type || 'chat'}</div>
+                <div><strong>状态:</strong> <span class="publish-status ${publishedClass}">${publishedText}</span></div>
                 ${model.url ? `<div><strong>URL:</strong> ${model.url}</div>` : ''}
                 ${model.apiKey ? `<div><strong>密钥:</strong> ${'*'.repeat(model.apiKey.length)}</div>` : ''}
             </div>
@@ -403,6 +470,7 @@ function openAddModelModal() {
     document.getElementById('modalModelUrl').value = '';
     document.getElementById('modalModelKey').value = '';
     document.getElementById('modalModelProvider').value = '';
+    document.getElementById('modalModelPublished').checked = true;
     clearModalErrors();
     document.getElementById('modelModal').classList.add('open');
 }
@@ -416,6 +484,7 @@ function openEditModelModal(model) {
     document.getElementById('modalModelUrl').value = model.url || '';
     document.getElementById('modalModelKey').value = model.apiKey || '';
     document.getElementById('modalModelProvider').value = model.provider || '';
+    document.getElementById('modalModelPublished').checked = model.published !== false;
     clearModalErrors();
     document.getElementById('modelModal').classList.add('open');
 }
@@ -486,16 +555,17 @@ function validateModelForm() {
 
 async function saveModelFromModal() {
     if (!validateModelForm()) return;
-    
+
     const modelData = {
         name: document.getElementById('modalModelName').value.trim(),
         id: document.getElementById('modalModelId').value.trim(),
         url: document.getElementById('modalModelUrl').value.trim(),
         apiKey: document.getElementById('modalModelKey').value.trim(),
         provider: document.getElementById('modalModelProvider').value.trim(),
-        type: 'chat'
+        type: 'chat',
+        published: document.getElementById('modalModelPublished').checked
     };
-    
+
     try {
         let response;
         if (editingModelId) {
@@ -511,7 +581,7 @@ async function saveModelFromModal() {
                 body: JSON.stringify(modelData)
             });
         }
-        
+
         if (response.ok) {
             closeModelModal();
             loadModels();
@@ -533,12 +603,12 @@ function editModel(modelId) {
 
 async function deleteModel(modelId) {
     if (!confirm('确定要删除此模型吗？')) return;
-    
+
     try {
         const response = await fetch(`/api/models/${modelId}`, {
             method: 'DELETE'
         });
-        
+
         if (response.ok) {
             if (selectedModel === modelId) {
                 selectedModel = currentModels.find(m => m.id !== modelId)?.id;
@@ -547,6 +617,27 @@ async function deleteModel(modelId) {
         }
     } catch (error) {
         console.error('删除模型失败:', error);
+    }
+}
+
+async function toggleModelPublished(modelId) {
+    const model = currentModels.find(m => m.id === modelId);
+    if (!model) return;
+
+    const newPublished = model.published === false;
+
+    try {
+        const response = await fetch(`/api/models/${modelId}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ published: newPublished })
+        });
+
+        if (response.ok) {
+            loadModels();
+        }
+    } catch (error) {
+        console.error('切换模型状态失败:', error);
     }
 }
 
