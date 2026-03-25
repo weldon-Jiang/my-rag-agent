@@ -18,7 +18,8 @@ const defaultModels = [
     type: 'chat',
     protocol: 'minimax',
     url: 'http://1811081066449577.cn-beijing.pai-eas.aliyuncs.com/api/predict/ctgii_mm25/v1/chat/completions',
-    apiKey: 'NzRjZmNmYTIwNjg5Yjk2MDBlNDA4ODRmYmYxOGZjODU3MjgwMDM0YQ=='
+    apiKey: 'NzRjZmNmYTIwNjg5Yjk2MDBlNDA4ODRmYmYxOGZjODU3MjgwMDM0YQ==',
+    published: true
   },
   {
     id: 'siliconflow-deepseek-r1-0528-qwen3-8b',
@@ -28,7 +29,8 @@ const defaultModels = [
     protocol: 'openai',
     url: 'https://api.siliconflow.cn/v1',
     apiKey: 'sk-upmtmjiewttqjsgbfndwayryxfebntvmwrwcvdkybsqjioqf',
-    modelId: 'deepseek-ai/DeepSeek-R1-0528-Qwen3-8B'
+    modelId: 'deepseek-ai/DeepSeek-R1-0528-Qwen3-8B',
+    published: true
   }
 ];
 
@@ -59,23 +61,30 @@ router.get('/', (req, res) => {
   res.json(models);
 });
 
+router.get('/published', (req, res) => {
+  const publishedModels = models.filter(m => m.published !== false);
+  res.json(publishedModels);
+});
+
 router.post('/', (req, res) => {
-  const { id, name, provider, type, url, apiKey } = req.body;
+  const { id, name, provider, type, url, apiKey, modelId, published } = req.body;
   if (!id || !name || !provider) {
     return res.status(400).json({ error: '缺少必要参数' });
   }
-  
+
   if (models.find(m => m.id === id)) {
     return res.status(400).json({ error: '模型ID已存在' });
   }
-  
-  const newModel = { 
-    id, 
-    name, 
-    provider, 
+
+  const newModel = {
+    id,
+    name,
+    provider,
     type: type || 'chat',
     url: url || '',
-    apiKey: apiKey || ''
+    apiKey: apiKey || '',
+    modelId: modelId || '',
+    published: published !== false
   };
   models.push(newModel);
   saveModels(models);
@@ -84,22 +93,24 @@ router.post('/', (req, res) => {
 
 router.put('/:id', (req, res) => {
   const modelId = req.params.id;
-  const { name, provider, type, url, apiKey } = req.body;
-  
+  const { name, provider, type, url, apiKey, modelId: newModelId, published } = req.body;
+
   const index = models.findIndex(m => m.id === modelId);
   if (index === -1) {
     return res.status(404).json({ error: '模型不存在' });
   }
-  
+
   models[index] = {
     ...models[index],
     name: name || models[index].name,
     provider: provider || models[index].provider,
     type: type || models[index].type,
     url: url !== undefined ? url : models[index].url,
-    apiKey: apiKey !== undefined ? apiKey : models[index].apiKey
+    apiKey: apiKey !== undefined ? apiKey : models[index].apiKey,
+    modelId: newModelId !== undefined ? newModelId : models[index].modelId,
+    published: published !== undefined ? published : models[index].published
   };
-  
+
   saveModels(models);
   res.json(models[index]);
 });
@@ -107,11 +118,11 @@ router.put('/:id', (req, res) => {
 router.delete('/:id', (req, res) => {
   const modelId = req.params.id;
   const index = models.findIndex(m => m.id === modelId);
-  
+
   if (index === -1) {
     return res.status(404).json({ error: '模型不存在' });
   }
-  
+
   models.splice(index, 1);
   saveModels(models);
   res.json({ success: true });

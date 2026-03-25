@@ -21,7 +21,7 @@ const storage = multer.diskStorage({
   }
 });
 
-const upload = multer({ 
+const upload = multer({
   storage: storage,
   limits: {
     fileSize: MAX_FILE_SIZE
@@ -31,12 +31,57 @@ const upload = multer({
   }
 });
 
+function getMimeType(filename) {
+  const ext = path.extname(filename).toLowerCase();
+  const mimeTypes = {
+    '.pdf': 'application/pdf',
+    '.txt': 'text/plain',
+    '.md': 'text/markdown',
+    '.jpg': 'image/jpeg',
+    '.jpeg': 'image/jpeg',
+    '.png': 'image/png',
+    '.gif': 'image/gif',
+    '.svg': 'image/svg+xml',
+    '.mp4': 'video/mp4',
+    '.avi': 'video/x-msvideo',
+    '.mov': 'video/quicktime',
+    '.mkv': 'video/x-matroska',
+  };
+  return mimeTypes[ext] || 'application/octet-stream';
+}
+
+router.get('/:filename', (req, res) => {
+  try {
+    let filename = req.params.filename;
+    try {
+      filename = decodeURIComponent(filename);
+    } catch (e) {
+    }
+    const filePath = path.join(KNOWLEDGE_DIR, filename);
+
+    if (!fs.existsSync(filePath)) {
+      return res.status(404).json({ error: '文件不存在' });
+    }
+
+    const ext = path.extname(filename).toLowerCase();
+    const mimeType = getMimeType(filename);
+
+    res.setHeader('Content-Type', mimeType);
+    res.setHeader('Content-Disposition', `inline; filename="${encodeURIComponent(filename)}"`);
+
+    const fileStream = fs.createReadStream(filePath);
+    fileStream.pipe(res);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 router.get('/', (req, res) => {
   try {
     if (!fs.existsSync(KNOWLEDGE_DIR)) {
       return res.json([]);
     }
-    
+
     const files = fs.readdirSync(KNOWLEDGE_DIR).map(filename => {
       const filePath = path.join(KNOWLEDGE_DIR, filename);
       const stats = fs.statSync(filePath);
@@ -46,7 +91,7 @@ router.get('/', (req, res) => {
         updated: stats.mtime
       };
     });
-    
+
     res.json(files);
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -58,7 +103,7 @@ router.post('/upload', upload.single('file'), (req, res) => {
     if (!req.file) {
       return res.status(400).json({ error: '没有上传文件' });
     }
-    
+
     let filename = req.file.filename;
     try {
       if (!Buffer.isBuffer(filename)) {
@@ -66,8 +111,8 @@ router.post('/upload', upload.single('file'), (req, res) => {
       }
     } catch (e) {
     }
-    res.json({ 
-      success: true, 
+    res.json({
+      success: true,
       filename: filename,
       size: req.file.size
     });
