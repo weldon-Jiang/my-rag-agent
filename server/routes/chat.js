@@ -8,6 +8,7 @@ const router = express.Router();
 const KNOWLEDGE_DIR = path.join(__dirname, '../../knowledge');
 const MODELS_FILE = path.join(__dirname, '../../data/models.json');
 const skillsCenter = require('../skills');
+const { respondToClarification, getPendingClarification, clearSessionClarifications } = require('../clarification');
 
 let modelCache = null;
 
@@ -29,6 +30,7 @@ const INTENT_KEYWORDS = {
   analyze_video: ['视频', '录像', '影片', 'movie', 'video', '这段视频', '影像'],
   get_weather: ['天气', '气温', '湿度', '下雨', '晴天', '多云', '冷', '热', '温度', '刮风', '下雨吗'],
   get_location: ['省', '市', '县', '区', '镇', '村', '位置', '在哪里', '经纬度', '海拔', '行政区划', '的人口', '面积', '哪个省', '属于哪个', '位于', '位置在哪'],
+  execute_bash: ['执行', '运行', '命令', 'cmd', '终端', 'shell', 'python', '代码', '脚本', '执行命令'],
   general: []
 };
 
@@ -39,6 +41,7 @@ const INTENT_TO_TOOLS = {
   analyze_video: ['analyze_video', 'search_knowledge_base'],
   get_weather: ['get_weather'],
   get_location: ['get_location'],
+  execute_bash: ['bash', 'python', 'ls'],
   general: ['search_knowledge_base']
 };
 
@@ -632,11 +635,15 @@ function formatToolDescription(toolName) {
   return desc;
 }
 
-function buildSystemPrompt(selectedTools, context, originalQuery) {
+function buildSystemPrompt(selectedTools, context, originalQuery, historyContext = '') {
   let prompt = '你是一个智能助手，名称为AIWing。\n\n';
 
+  if (historyContext) {
+    prompt += `${historyContext}\n\n`;
+  }
+
   if (originalQuery) {
-    prompt += `用户原始问题：${originalQuery}\n\n`;
+    prompt += `用户当前问题：${originalQuery}\n\n`;
   }
 
   if (context) {
@@ -656,6 +663,61 @@ function buildSystemPrompt(selectedTools, context, originalQuery) {
   }
 
   return prompt;
+}
+
+function analyzeHistoryRelevance(currentQuery, history) {
+  if (!history || history.length === 0) {
+    return '';
+  }
+
+  console.log('[Memory] 分析历史消息关联性...');
+  console.log('[Memory] 当前问题:', currentQuery);
+  
+  const currentKeywordsObj = extractKeywords(currentQuery);
+  const currentKeywords = currentKeywordsObj.words || [];
+  console.log('[Memory] 当前问题关键词:', currentKeywords);
+  
+  const relevantHistory = [];
+  
+  for (let i = 0; i < history.length; i++) {
+    const msg = history[i];
+    if (msg.role !== 'user') continue;
+    
+    const historyKeywordsObj = extractKeywords(msg.content);
+    const historyKeywords = historyKeywordsObj.words || [];
+    const overlap = currentKeywords.filter(k => historyKeywords.includes(k));
+    
+    console.log(`[Memory] 历史问题 ${i + 1}:`, msg.content.substring(0, 30));
+    console.log('[Memory] 历史关键词:', historyKeywords);
+    console.log('[Memory] 关键词重叠:', overlap);
+    
+    if (overlap.length > 0) {
+      const assistantMsg = history[i + 1];
+      relevantHistory.push({
+        question: msg.content,
+        answer: assistantMsg && assistantMsg.role === 'assistant' ? assistantMsg.content : ''
+      });
+    }
+  }
+  
+  if (relevantHistory.length > 0) {
+    console.log('[Memory] 找到相关历史消息:', relevantHistory.length);
+    const context = relevantHistory.map(h => 
+      `之前的问题: ${h.question}\n之前的回答: ${h.answer}`
+    ).join('\n\n---\n\n');
+    
+    return `\n【相关历史对话】\n${context}\n`;
+  }
+  
+  console.log('[Memory] 未找到相关历史消息');
+  return '';
+}
+
+function extractKeywords(text) {
+  const stopWords = ['的', '是', '在', '和', '了', '有', '什么', '怎么', '如何', '为什么', '哪个', '哪些', '吗', '呢', '吧', '啊', 'the', 'a', 'an', 'is', 'are', 'was', 'were', 'in', 'on', 'at', 'to', 'for', 'of', 'with', 'by'];
+  const words = text.replace(/[^\u4e00-\u9fa5a-zA-Z0-9\s]/g, ' ').split(/\s+/);
+  const keywords = words.filter(w => w.length > 1 && !stopWords.includes(w.toLowerCase()));
+  return [...new Set(keywords)];
 }
 
 function getNGrams(text, n = 2) {
@@ -1310,12 +1372,13 @@ function formatToolResults(toolResults) {
 
 router.post('/', async (req, res) => {
   try {
-    const { query, mode, model: modelId } = req.body;
+    const { query, mode, model: modelId, history = [] } = req.body;
 
     console.log('[Chat] ==================== 收到请求 ====================');
     console.log('[Chat] 用户输入:', query);
     console.log('[Chat] 模式:', mode);
     console.log('[Chat] 模型:', modelId);
+    console.log('[Chat] 历史消息数:', history.length);
 
     if (!query || !mode || !modelId) {
       return res.status(400).json({ error: '缺少必要参数' });
@@ -1330,6 +1393,7 @@ router.post('/', async (req, res) => {
 
     let response = '';
     let source = '';
+    const historyContext = analyzeHistoryRelevance(query, history);
 
     if (mode === 'ai') {
       console.log('[Chat] 处理用户请求:', query);
@@ -1338,7 +1402,7 @@ router.post('/', async (req, res) => {
 
       if (matchedIntents.length === 0) {
         console.log('[Chat] 未匹配到任何技能，直接发送问题给大模型');
-        const systemPrompt = buildSystemPrompt([], '', query);
+        const systemPrompt = buildSystemPrompt([], '', query, historyContext);
         console.log('[Prompt Assembler] System Prompt:');
         console.log(systemPrompt);
         console.log('='.repeat(60));
@@ -1408,7 +1472,7 @@ router.post('/', async (req, res) => {
           }).join('\n\n');
         }
 
-        const systemPrompt = buildSystemPrompt(selectedTools, context, query);
+        const systemPrompt = buildSystemPrompt(selectedTools, context, query, historyContext);
         console.log('[Prompt Assembler] 组装后的 System Prompt:');
         console.log(systemPrompt);
         console.log('='.repeat(60));
@@ -1439,7 +1503,7 @@ router.post('/', async (req, res) => {
           source = '知识库';
         } else {
           console.log('[Chat] 知识库无结果，但模式为hybrid，继续调用大模型');
-          const systemPrompt = buildSystemPrompt(selectedTools, '', query);
+          const systemPrompt = buildSystemPrompt(selectedTools, '', query, historyContext);
           console.log('[Prompt Assembler] 组装后的 System Prompt:');
           console.log(systemPrompt);
           console.log('='.repeat(60));
@@ -1455,7 +1519,7 @@ router.post('/', async (req, res) => {
           return `【${r.filename}】${skillTag}\n${r.content}`;
         }).join('\n\n');
 
-        const systemPrompt = buildSystemPrompt(selectedTools, context, query);
+        const systemPrompt = buildSystemPrompt(selectedTools, context, query, historyContext);
         console.log('[Prompt Assembler] 组装后的 System Prompt:');
         console.log(systemPrompt);
         console.log('='.repeat(60));
@@ -1480,3 +1544,52 @@ router.post('/', async (req, res) => {
 });
 
 module.exports = router;
+
+router.post('/clarification/respond', async (req, res) => {
+  try {
+    const { clarification_id, response, session_id } = req.body;
+
+    if (!clarification_id || !response) {
+      return res.status(400).json({
+        success: false,
+        error: '缺少必要参数：clarification_id 和 response'
+      });
+    }
+
+    const result = respondToClarification(clarification_id, response);
+
+    res.json(result);
+  } catch (error) {
+    console.error('处理澄清响应错误:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+router.get('/clarification/:clarification_id', async (req, res) => {
+  try {
+    const { clarification_id } = req.params;
+
+    const clarification = getPendingClarification(clarification_id);
+
+    if (!clarification) {
+      return res.status(404).json({
+        success: false,
+        error: '澄清请求不存在或已过期'
+      });
+    }
+
+    res.json({
+      success: true,
+      clarification
+    });
+  } catch (error) {
+    console.error('获取澄清请求错误:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});

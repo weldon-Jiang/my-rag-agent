@@ -10,15 +10,7 @@
     <div class="container">
         <header>
             <h1>🤖 本地知识库智能体</h1>
-            <div class="theme-switcher">
-                <button class="theme-btn active" data-theme="system">跟随系统</button>
-                <button class="theme-btn" data-theme="light">浅色</button>
-                <button class="theme-btn" data-theme="dark">深色</button>
-            </div>
-        </header>
-
-        <div class="main-content">
-            <div class="sidebar">
+            <nav class="top-nav">
                 <div class="menu-item active" data-page="chat">
                     <span class="menu-icon">💬</span>
                     <span>AI对话</span>
@@ -31,31 +23,47 @@
                     <span class="menu-icon">⚙️</span>
                     <span>模型管理</span>
                 </div>
+            </nav>
+            <div class="theme-switcher">
+                <button class="theme-btn active" data-theme="system">跟随系统</button>
+                <button class="theme-btn" data-theme="light">浅色</button>
+                <button class="theme-btn" data-theme="dark">深色</button>
             </div>
+        </header>
 
+        <div class="main-content">
             <div class="content-area">
                 <div id="chatPage" class="page active">
-                    <div class="chat-top-controls">
-                        <div class="mode-buttons">
-                            <button class="mode-btn" data-mode="knowledge">仅知识库</button>
-                            <button class="mode-btn" data-mode="ai">仅AI</button>
-                            <button class="mode-btn active" data-mode="hybrid">混合</button>
+                    <div class="chat-container">
+                        <div class="session-sidebar">
+                            <div class="session-header">
+                                <button id="newSessionBtn" class="new-session-btn">+ 新建会话</button>
+                            </div>
+                            <div id="sessionList" class="session-list"></div>
                         </div>
-                        <div id="modelSelectWrapper"></div>
-                    </div>
-                    <div id="chatMessages" class="chat-messages"></div>
-                    
-                    <div class="input-area">
-                        <div class="input-wrapper">
-                            <textarea id="chatInput" placeholder="输入你的问题... (Shift+Enter换行)" rows="3"></textarea>
-                            <button id="sendBtn">发送</button>
+                        <div class="chat-main">
+                            <div class="chat-top-controls">
+                                <div class="mode-buttons">
+                                    <button class="mode-btn" data-mode="knowledge">仅知识库</button>
+                                    <button class="mode-btn" data-mode="ai">仅AI</button>
+                                    <button class="mode-btn active" data-mode="hybrid">混合</button>
+                                </div>
+                                <div id="modelSelectWrapper"></div>
+                            </div>
+                            <div id="chatMessages" class="chat-messages"></div>
+                            
+                            <div class="input-area">
+                                <div class="input-wrapper">
+                                    <textarea id="chatInput" placeholder="输入你的问题... (Shift+Enter换行)" rows="3"></textarea>
+                                    <button id="sendBtn">发送</button>
+                                </div>
+                                <div class="attachments" id="attachments"></div>
+                            </div>
                         </div>
-                        <div class="attachments" id="attachments"></div>
                     </div>
                 </div>
 
                 <div id="knowledgePage" class="page">
-                    <h2>📚 知识库管理</h2>
                     <div class="upload-area">
                         <div class="upload-dropzone" id="uploadDropzone">
                             <div class="dropzone-content">
@@ -73,7 +81,6 @@
                 </div>
 
                 <div id="modelsPage" class="page">
-                    <h2>⚙️ 模型管理</h2>
                     <div class="models-header">
                         <button id="openAddModelModalBtn" class="add-model-btn">+ 新增模型</button>
                     </div>
