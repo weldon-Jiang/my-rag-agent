@@ -6,6 +6,7 @@ let editingModelId = null;
 let selectedFiles = [];
 
 document.addEventListener('DOMContentLoaded', () => {
+    loadSessions();
     loadFiles();
     loadModels();
     setupEventListeners();
@@ -14,14 +15,25 @@ document.addEventListener('DOMContentLoaded', () => {
     setupChatInput();
     setupModelModal();
     initTheme();
+    setupSessionEvents();
 });
+
+function setupSessionEvents() {
+    const newSessionBtn = document.getElementById('newSessionBtn');
+    if (newSessionBtn) {
+        newSessionBtn.addEventListener('click', () => {
+            createNewSession();
+        });
+    }
+}
 
 function initTheme() {
     const saved = localStorage.getItem('theme') || 'system';
     applyTheme(saved);
     updateThemeButtons();
 
-    window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', (e) => {
+    const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
+    mediaQuery.addEventListener('change', (e) => {
         const currentTheme = localStorage.getItem('theme') || 'system';
         if (currentTheme === 'system') {
             applyTheme('system');
@@ -30,10 +42,13 @@ function initTheme() {
 }
 
 function applyTheme(theme) {
+    console.log('[Theme] applyTheme called with:', theme);
     if (theme === 'system') {
         const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+        console.log('[Theme] System prefers dark:', prefersDark);
         document.documentElement.setAttribute('data-theme', prefersDark ? 'dark' : 'light');
     } else {
+        console.log('[Theme] Setting theme to:', theme);
         document.documentElement.setAttribute('data-theme', theme);
     }
     localStorage.setItem('theme', theme);
@@ -104,7 +119,9 @@ function navigateTo(page) {
     document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
     document.getElementById(`${page}Page`).classList.add('active');
     
-    if (page === 'knowledge') {
+    if (page === 'chat') {
+        loadSessionMessages(currentSessionId);
+    } else if (page === 'knowledge') {
         loadFiles();
     } else if (page === 'models') {
         loadModels();
@@ -722,17 +739,24 @@ async function sendMessage() {
     }
     
     addMessage(fullMessage, 'user');
+    addMessageToSession('user', fullMessage);
     chatInput.value = '';
     attachments = [];
     renderAttachments();
     
     const loadingId = showLoading();
     
+    const session = sessions.find(s => s.id === currentSessionId);
+    const history = session ? session.messages.slice(0, -1).map(msg => ({
+        role: msg.role,
+        content: msg.content
+    })) : [];
+    
     try {
         const response = await fetch('/api/chat', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ query: message, mode, model })
+            body: JSON.stringify({ query: message, mode, model, history })
         });
         
         const result = await response.json();
@@ -741,13 +765,19 @@ async function sendMessage() {
         
         if (result.error) {
             addMessage(`错误: ${result.error}`, 'assistant');
+            addMessageToSession('assistant', `错误: ${result.error}`);
+        } else if (result.clarification) {
+            addMessageToSession('assistant', result.response || '');
+            handleClarification(result);
         } else {
             addMessage(result.response, 'assistant', result.source, result.knowledgeResults);
+            addMessageToSession('assistant', result.response, { source: result.source, knowledgeResults: result.knowledgeResults });
         }
     } catch (error) {
         removeLoading(loadingId);
         console.error('请求失败:', error);
         addMessage(`发送失败: ${error.message}`, 'assistant');
+        addMessageToSession('assistant', `发送失败: ${error.message}`);
     }
 }
 
@@ -765,8 +795,29 @@ function addMessage(content, role, source = '', knowledgeResults = []) {
         sourceHtml += `<div class="message-source">引用文件: ${knowledgeResults.map(r => r.filename).join(', ')}</div>`;
     }
     
+    let thinkContent = '';
+    let answerContent = content;
+    
+    if (content.includes('<think>') && content.includes('</think>')) {
+        const startIdx = content.indexOf('<think>');
+        const endIdx = content.indexOf('</think>');
+        const thinkStart = '<think>'.length;
+        const thinkEnd = '</think>'.length;
+        if (startIdx !== -1 && endIdx !== -1 && endIdx > startIdx) {
+            thinkContent = content.substring(startIdx + thinkStart, endIdx).trim();
+            const afterThink = endIdx + thinkEnd;
+            answerContent = content.substring(afterThink).trim();
+        }
+    }
+    
+    let messageHtml = '';
+    if (thinkContent) {
+        messageHtml += `<div class="message-think"><div class="think-label">思考中...</div>${escapeHtml(thinkContent)}</div>`;
+    }
+    messageHtml += `<div class="message-content">${escapeHtml(answerContent)}</div>`;
+    
     messageDiv.innerHTML = `
-        <div class="message-content">${escapeHtml(content)}</div>
+        ${messageHtml}
         ${sourceHtml}
     `;
     
@@ -796,4 +847,307 @@ function escapeHtml(text) {
     const div = document.createElement('div');
     div.textContent = text;
     return div.innerHTML;
+}
+
+let pendingClarification = null;
+
+let sessions = [];
+let currentSessionId = null;
+const STORAGE_KEY = 'rag_agent_sessions';
+
+function loadSessions() {
+    try {
+        const stored = localStorage.getItem(STORAGE_KEY);
+        if (stored) {
+            sessions = JSON.parse(stored);
+        }
+        if (sessions.length === 0) {
+            createNewSession();
+        } else {
+            currentSessionId = sessions[0].id;
+            renderSessionList();
+            loadSessionMessages(currentSessionId);
+        }
+    } catch (e) {
+        console.error('加载会话失败:', e);
+        sessions = [];
+        createNewSession();
+    }
+}
+
+function saveSessions() {
+    try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(sessions));
+    } catch (e) {
+        console.error('保存会话失败:', e);
+    }
+}
+
+function createNewSession() {
+    const session = {
+        id: 'session_' + Date.now(),
+        title: '新会话',
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+        messages: []
+    };
+    sessions.unshift(session);
+    currentSessionId = session.id;
+    saveSessions();
+    renderSessionList();
+    clearChatMessages();
+    return session;
+}
+
+function deleteSession(sessionId) {
+    sessions = sessions.filter(s => s.id !== sessionId);
+    if (sessions.length === 0) {
+        createNewSession();
+    } else if (currentSessionId === sessionId) {
+        currentSessionId = sessions[0].id;
+        loadSessionMessages(currentSessionId);
+    }
+    saveSessions();
+    renderSessionList();
+}
+
+function switchSession(sessionId) {
+    currentSessionId = sessionId;
+    loadSessionMessages(sessionId);
+    renderSessionList();
+}
+
+function loadSessionMessages(sessionId) {
+    const session = sessions.find(s => s.id === sessionId);
+    if (!session) return;
+    
+    const chatMessages = document.getElementById('chatMessages');
+    chatMessages.innerHTML = '';
+    
+    session.messages.forEach(msg => {
+        if (msg.role === 'user') {
+            addMessage(msg.content, 'user');
+        } else if (msg.role === 'assistant') {
+            addMessage(msg.content, msg.source || 'assistant', msg.source, msg.knowledgeResults);
+        }
+    });
+}
+
+function addMessageToSession(role, content, extra = {}) {
+    const session = sessions.find(s => s.id === currentSessionId);
+    if (!session) return;
+    
+    const message = {
+        role,
+        content,
+        timestamp: Date.now(),
+        ...extra
+    };
+    session.messages.push(message);
+    session.updatedAt = Date.now();
+    
+    if (role === 'user') {
+        let title = content.substring(0, 20);
+        if (content.length > 20) title += '...';
+        session.title = title;
+    }
+    
+    saveSessions();
+    renderSessionList();
+}
+
+function formatTime(timestamp) {
+    const date = new Date(timestamp);
+    const now = new Date();
+    const diff = now - date;
+    
+    if (diff < 60000) return '刚刚';
+    if (diff < 3600000) return Math.floor(diff / 60000) + '分钟前';
+    if (diff < 86400000) return Math.floor(diff / 3600000) + '小时前';
+    if (diff < 604800000) return Math.floor(diff / 86400000) + '天前';
+    
+    return date.toLocaleDateString('zh-CN');
+}
+
+function renderSessionList() {
+    const sessionList = document.getElementById('sessionList');
+    if (!sessionList) return;
+    
+    sessionList.innerHTML = '';
+    
+    sessions.forEach(session => {
+        const item = document.createElement('div');
+        item.className = 'session-item' + (session.id === currentSessionId ? ' active' : '');
+        item.innerHTML = `
+            <span class="session-item-title">${escapeHtml(session.title)}</span>
+            <span class="session-item-time">${formatTime(session.updatedAt)}</span>
+            <button class="delete-session-btn" data-id="${session.id}">🗑️</button>
+        `;
+        
+        item.addEventListener('click', (e) => {
+            if (!e.target.classList.contains('delete-session-btn')) {
+                switchSession(session.id);
+            }
+        });
+        
+        const deleteBtn = item.querySelector('.delete-session-btn');
+        deleteBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            if (confirm('确定要删除这个会话吗？')) {
+                deleteSession(session.id);
+            }
+        });
+        
+        sessionList.appendChild(item);
+    });
+}
+
+function clearChatMessages() {
+    const chatMessages = document.getElementById('chatMessages');
+    if (chatMessages) {
+        chatMessages.innerHTML = '';
+    }
+}
+
+function handleClarification(data) {
+    console.log('[Frontend] Received clarification request:', data);
+
+    pendingClarification = {
+        id: data.clarification_id,
+        message: data.message,
+        type: data.type,
+        type_label: data.type_label,
+        options: data.options || [],
+        session_id: data.session_id
+    };
+
+    const chatMessages = document.getElementById('chatMessages');
+    const messageDiv = document.createElement('div');
+    messageDiv.className = 'message assistant clarification';
+
+    let optionsHtml = '';
+    if (pendingClarification.options && pendingClarification.options.length > 0) {
+        optionsHtml = `
+            <div class="clarification-options">
+                ${pendingClarification.options.map((option, index) => `
+                    <button class="clarification-option" data-option="${option}" data-index="${index}">
+                        ${option}
+                    </button>
+                `).join('')}
+            </div>
+            <div class="clarification-input">
+                <input type="text" id="clarificationInput" placeholder="或直接输入您的回答..." />
+                <button id="clarificationSubmit">确定</button>
+            </div>
+        `;
+    } else {
+        optionsHtml = `
+            <div class="clarification-input">
+                <input type="text" id="clarificationInput" placeholder="请输入您的回答..." />
+                <button id="clarificationSubmit">确定</button>
+            </div>
+        `;
+    }
+
+    messageDiv.innerHTML = `
+        <div class="message-content clarification-content">
+            <div class="clarification-message">${escapeHtml(data.message)}</div>
+            ${optionsHtml}
+        </div>
+    `;
+
+    chatMessages.appendChild(messageDiv);
+    chatMessages.scrollTop = chatMessages.scrollHeight;
+
+    document.querySelectorAll('.clarification-option').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const option = btn.dataset.option;
+            submitClarification(option);
+        });
+    });
+
+    const submitBtn = document.getElementById('clarificationSubmit');
+    if (submitBtn) {
+        submitBtn.addEventListener('click', () => {
+            const input = document.getElementById('clarificationInput');
+            if (input && input.value.trim()) {
+                submitClarification(input.value.trim());
+            }
+        });
+    }
+
+    const input = document.getElementById('clarificationInput');
+    if (input) {
+        input.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter' && input.value.trim()) {
+                submitClarification(input.value.trim());
+            }
+        });
+    }
+}
+
+async function submitClarification(response) {
+    if (!pendingClarification) {
+        console.error('[Frontend] No pending clarification');
+        return;
+    }
+
+    console.log('[Frontend] Submitting clarification response:', response);
+
+    try {
+        const responseObj = await fetch('/api/chat/clarification/respond', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                clarification_id: pendingClarification.id,
+                response: response
+            })
+        });
+
+        const result = await responseObj.json();
+        console.log('[Frontend] Clarification response result:', result);
+
+        const clarificationMsg = document.querySelector('.clarification');
+        if (clarificationMsg) {
+            clarificationMsg.remove();
+        }
+
+        addMessage(`已响应: ${response}`, 'user');
+
+        const loadingId = showLoading();
+
+        const chatResponse = await fetch('/api/chat', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                query: response,
+                mode: selectedMode,
+                model: selectedModel
+            })
+        });
+
+        removeLoading(loadingId);
+
+        const chatResult = await chatResponse.json();
+
+        if (chatResult.error) {
+            addMessage(`错误: ${chatResult.error}`, 'assistant');
+        } else {
+            if (chatResult.clarification) {
+                handleClarification(chatResult);
+            } else {
+                addMessage(chatResult.response, 'assistant', chatResult.source, chatResult.knowledgeResults);
+            }
+        }
+
+        pendingClarification = null;
+
+    } catch (error) {
+        console.error('[Frontend] Error submitting clarification:', error);
+        addMessage(`提交响应失败: ${error.message}`, 'assistant');
+    }
 }

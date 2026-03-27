@@ -8,6 +8,16 @@ const PdfsSkill = require('./pdfs-skill');
 const WeatherSkill = require('./weather-skill');
 const LocationSkill = require('./location-skill');
 
+const sandbox = require('../sandbox/tools');
+const { askClarification, getPendingClarification, respondToClarification, clearClarification } = require('../clarification');
+
+const bashTool = sandbox.bashTool;
+const pythonTool = sandbox.pythonTool;
+const lsTool = sandbox.lsTool;
+const readFileTool = sandbox.readFileTool;
+const writeFileTool = sandbox.writeFileTool;
+const strReplaceTool = sandbox.strReplaceTool;
+
 const toolDefinitions = [
   {
     type: 'function',
@@ -117,6 +127,191 @@ const toolDefinitions = [
           },
         },
         required: ['location'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'bash',
+      description: '在沙盒环境中执行 Shell 命令。优先使用 python 来运行 Python 代码',
+      parameters: {
+        type: 'object',
+        properties: {
+          command: {
+            type: 'string',
+            description: '要执行的 bash 命令，使用绝对路径访问文件',
+          },
+          description: {
+            type: 'string',
+            description: '简短说明为什么要执行这个命令',
+          },
+        },
+        required: ['command', 'description'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'python',
+      description: '执行 Python 代码，在沙盒环境中运行',
+      parameters: {
+        type: 'object',
+        properties: {
+          code: {
+            type: 'string',
+            description: '要执行的 Python 代码',
+          },
+          description: {
+            type: 'string',
+            description: '简短说明为什么要执行这段代码',
+          },
+        },
+        required: ['code', 'description'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'ls',
+      description: '列出目录内容，以树形结构显示',
+      parameters: {
+        type: 'object',
+        properties: {
+          path: {
+            type: 'string',
+            description: '要列出的目录绝对路径',
+          },
+          description: {
+            type: 'string',
+            description: '简短说明为什么要列出这个目录',
+          },
+        },
+        required: ['path', 'description'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'read_file',
+      description: '读取文本文件内容，可以指定行号范围',
+      parameters: {
+        type: 'object',
+        properties: {
+          path: {
+            type: 'string',
+            description: '要读取的文件绝对路径',
+          },
+          start_line: {
+            type: 'integer',
+            description: '可选，起始行号（1-indexed）',
+          },
+          end_line: {
+            type: 'integer',
+            description: '可选，结束行号（1-indexed）',
+          },
+          description: {
+            type: 'string',
+            description: '简短说明为什么要读取这个文件',
+          },
+        },
+        required: ['path', 'description'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'write_file',
+      description: '写入文本内容到文件',
+      parameters: {
+        type: 'object',
+        properties: {
+          path: {
+            type: 'string',
+            description: '要写入的文件绝对路径',
+          },
+          content: {
+            type: 'string',
+            description: '要写入的内容',
+          },
+          append: {
+            type: 'boolean',
+            description: '是否追加模式，默认为 false（覆盖）',
+          },
+          description: {
+            type: 'string',
+            description: '简短说明为什么要写入这个文件',
+          },
+        },
+        required: ['path', 'content', 'description'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'str_replace',
+      description: '替换文件中的字符串',
+      parameters: {
+        type: 'object',
+        properties: {
+          path: {
+            type: 'string',
+            description: '要修改的文件绝对路径',
+          },
+          old_str: {
+            type: 'string',
+            description: '要替换的原始字符串',
+          },
+          new_str: {
+            type: 'string',
+            description: '替换后的新字符串',
+          },
+          replace_all: {
+            type: 'boolean',
+            description: '是否替换所有匹配项，默认为 false',
+          },
+          description: {
+            type: 'string',
+            description: '简短说明为什么要进行这个替换',
+          },
+        },
+        required: ['path', 'old_str', 'new_str', 'description'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'ask_clarification',
+      description: '当需要用户澄清信息时使用。执行会中断，等待用户响应后再继续',
+      parameters: {
+        type: 'object',
+        properties: {
+          question: {
+            type: 'string',
+            description: '要询问用户的问题',
+          },
+          clarification_type: {
+            type: 'string',
+            enum: ['missing_info', 'ambiguous_requirement', 'approach_choice', 'risk_confirmation', 'suggestion'],
+            description: '澄清类型：missing_info（缺少信息）, ambiguous_requirement（需求不明确）, approach_choice（实现方式选择）, risk_confirmation（风险确认）, suggestion（建议采纳）',
+          },
+          context: {
+            type: 'string',
+            description: '可选，解释为什么需要澄清的背景信息',
+          },
+          options: {
+            type: 'array',
+            items: { type: 'string' },
+            description: '可选，供用户选择的选项列表',
+          },
+        },
+        required: ['question', 'clarification_type'],
       },
     },
   },
@@ -424,6 +619,34 @@ class SkillsCenter {
           }
           const result = await weatherSkill.process(args.query || args.city || '', context);
           return result;
+        }
+
+        case 'bash': {
+          return await bashTool(args, context);
+        }
+
+        case 'python': {
+          return await pythonTool(args, context);
+        }
+
+        case 'ls': {
+          return await lsTool(args, context);
+        }
+
+        case 'read_file': {
+          return await readFileTool(args, context);
+        }
+
+        case 'write_file': {
+          return await writeFileTool(args, context);
+        }
+
+        case 'str_replace': {
+          return await strReplaceTool(args, context);
+        }
+
+        case 'ask_clarification': {
+          return askClarification(args, context);
         }
 
         default:
