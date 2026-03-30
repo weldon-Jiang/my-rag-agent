@@ -13,6 +13,7 @@ const VIRTUAL_TO_ACTUAL = {
   '/mnt/user-data/workspace': WORKSPACE_DIR,
   '/mnt/user-data/uploads': UPLOADS_DIR,
   '/mnt/user-data/outputs': OUTPUTS_DIR,
+  '/mnt/user-data/downloads': path.join(__dirname, '../../data/downloads'),
 };
 
 const ACTUAL_TO_VIRTUAL = {

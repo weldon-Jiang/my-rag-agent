@@ -64,6 +64,37 @@ function updateThemeButtons() {
     });
 }
 
+const BOT_NAME_KEY = 'rag_agent_bot_name';
+const DEFAULT_BOT_NAME = '智能助手';
+
+function getBotName() {
+    return localStorage.getItem(BOT_NAME_KEY) || DEFAULT_BOT_NAME;
+}
+
+function setBotName(name) {
+    localStorage.setItem(BOT_NAME_KEY, name);
+}
+
+const USER_NAME_KEY = 'rag_agent_user_name';
+
+function getUserName() {
+    return localStorage.getItem(USER_NAME_KEY) || null;
+}
+
+function setUserName(name) {
+    localStorage.setItem(USER_NAME_KEY, name);
+}
+
+const RELATIONSHIP_KEY = 'rag_agent_user_relationship';
+
+function getRelationship() {
+    return localStorage.getItem(RELATIONSHIP_KEY) || null;
+}
+
+function setRelationship(relationship) {
+    localStorage.setItem(RELATIONSHIP_KEY, relationship);
+}
+
 function setupThemeSwitcher() {
     document.querySelectorAll('.theme-btn').forEach(btn => {
         btn.addEventListener('click', () => {
@@ -273,9 +304,72 @@ async function loadFiles() {
         const response = await fetch('/api/files');
         const files = await response.json();
         renderFileList(files);
+        await loadSkillsAndTools();
     } catch (error) {
         console.error('加载文件失败:', error);
     }
+}
+
+async function loadSkillsAndTools() {
+    try {
+        const response = await fetch('/api/skills');
+        const data = await response.json();
+        renderSkillsAndTools(data);
+    } catch (error) {
+        console.error('加载技能和工具失败:', error);
+    }
+}
+
+function renderSkillsAndTools(data) {
+    const toolsDocs = document.getElementById('toolsDocs');
+    if (!toolsDocs) return;
+    
+    let html = '';
+    
+    if (data.skillsByCategory) {
+        html += '<div class="doc-section">';
+        html += '<h4>📦 技能（自动调用）</h4>';
+        
+        for (const [category, skills] of Object.entries(data.skillsByCategory)) {
+            const categoryNames = {
+                'file_processing': '文件处理',
+                'info_query': '信息查询'
+            };
+            html += `<div class="doc-category"><span class="category-label">${categoryNames[category] || category}</span></div>`;
+            html += '<div class="doc-items">';
+            for (const skill of skills) {
+                html += `<div class="tool-doc">
+                    <h4>${skill.name}</h4>
+                    <p>${skill.description}</p>
+                    <p class="trigger-hint">触发: ${skill.trigger || '自动触发'}</p>
+                    <p class="usage-hint">用法: ${skill.usage || ''}</p>
+                </div>`;
+            }
+            html += '</div>';
+        }
+        html += '</div>';
+    }
+    
+    if (data.toolsWithDescriptions) {
+        html += '<div class="doc-section">';
+        html += '<h4>🛠️ 工具（按需调用）</h4>';
+        
+        for (const group of data.toolsWithDescriptions) {
+            html += `<div class="doc-category"><span class="category-label">${group.category}</span></div>`;
+            html += '<div class="doc-items">';
+            for (const tool of group.tools) {
+                html += `<div class="tool-doc">
+                    <h4>${tool.name}</h4>
+                    <p>${tool.description}</p>
+                    <p class="trigger-hint">触发: ${tool.trigger}</p>
+                </div>`;
+            }
+            html += '</div>';
+        }
+        html += '</div>';
+    }
+    
+    toolsDocs.innerHTML = html;
 }
 
 function renderFileList(files) {
@@ -756,7 +850,15 @@ async function sendMessage() {
         const response = await fetch('/api/chat', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ query: message, mode, model, history })
+            body: JSON.stringify({ 
+                query: message, 
+                mode, 
+                model, 
+                history,
+                botName: getBotName(),
+                userName: getUserName(),
+                relationship: getRelationship()
+            })
         });
         
         const result = await response.json();
@@ -772,6 +874,21 @@ async function sendMessage() {
         } else {
             addMessage(result.response, 'assistant', result.source, result.knowledgeResults);
             addMessageToSession('assistant', result.response, { source: result.source, knowledgeResults: result.knowledgeResults });
+            
+            if (result.newBotName) {
+                setBotName(result.newBotName);
+                console.log('[Bot] 智能体名称已更新:', result.newBotName);
+            }
+            
+            if (result.newUserName) {
+                setUserName(result.newUserName);
+                console.log('[User] 用户名称已更新:', result.newUserName);
+            }
+            
+            if (result.newRelationship) {
+                setRelationship(result.newRelationship);
+                console.log('[User] 用户关系已更新:', result.newRelationship);
+            }
         }
     } catch (error) {
         removeLoading(loadingId);
@@ -1149,5 +1266,16 @@ async function submitClarification(response) {
     } catch (error) {
         console.error('[Frontend] Error submitting clarification:', error);
         addMessage(`提交响应失败: ${error.message}`, 'assistant');
+    }
+}
+
+function toggleToolsDocs() {
+    const toolsDocs = document.getElementById('toolsDocs');
+    const toggleIcon = document.querySelector('.toggle-icon');
+    if (toolsDocs) {
+        toolsDocs.classList.toggle('collapsed');
+        if (toggleIcon) {
+            toggleIcon.textContent = toolsDocs.classList.contains('collapsed') ? '▶' : '▼';
+        }
     }
 }

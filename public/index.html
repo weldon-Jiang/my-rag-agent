@@ -64,20 +64,67 @@
                 </div>
 
                 <div id="knowledgePage" class="page">
-                    <div class="upload-area">
-                        <div class="upload-dropzone" id="uploadDropzone">
-                            <div class="dropzone-content">
-                                <div class="dropzone-icon">📁</div>
-                                <p>点击选择文件或拖拽文件到此处</p>
-                                <p class="dropzone-hint">单个文件不超过100MB</p>
-                                <input type="file" id="fileInput" multiple style="display: none;">
+                    <h2>📚 知识库管理</h2>
+                    <div class="knowledge-container">
+                        <div class="knowledge-left">
+                            <div class="upload-card">
+                                <h3>上传文件</h3>
+                                <div class="upload-area">
+                                    <div class="upload-dropzone" id="uploadDropzone">
+                                        <div class="dropzone-content">
+                                            <div class="dropzone-icon">📁</div>
+                                            <p>点击选择文件或拖拽文件到此处</p>
+                                            <p class="dropzone-hint">单个文件不超过100MB</p>
+                                            <input type="file" id="fileInput" multiple style="display: none;">
+                                        </div>
+                                    </div>
+                                    <div class="selected-files" id="selectedFiles"></div>
+                                    <button id="uploadBtn" class="upload-btn" disabled>上传文件</button>
+                                </div>
+                                <div id="uploadProgress" class="upload-progress"></div>
+                            </div>
+                            <div class="tools-card">
+                                <div class="tools-header" onclick="toggleToolsDocs()">
+                                    <h3>🛠️ 可用工具说明</h3>
+                                    <span class="toggle-icon">▼</span>
+                                </div>
+                                <div class="tools-docs" id="toolsDocs">
+                                    <div class="tools-docs-content">
+                                        <div class="tool-doc">
+                                            <h4>bash</h4>
+                                            <p>执行 Shell 命令</p>
+                                        </div>
+                                        <div class="tool-doc">
+                                            <h4>python</h4>
+                                            <p>执行 Python 代码</p>
+                                        </div>
+                                        <div class="tool-doc">
+                                            <h4>ls</h4>
+                                            <p>列出目录内容</p>
+                                        </div>
+                                        <div class="tool-doc">
+                                            <h4>read_file</h4>
+                                            <p>读取文件</p>
+                                        </div>
+                                        <div class="tool-doc">
+                                            <h4>write_file</h4>
+                                            <p>写入文件</p>
+                                        </div>
+                                        <div class="tool-doc">
+                                            <h4>str_replace</h4>
+                                            <p>替换字符串</p>
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
                         </div>
-                        <div class="selected-files" id="selectedFiles"></div>
-                        <button id="uploadBtn" class="upload-btn" disabled>上传文件</button>
+                        <div class="knowledge-right">
+                            <div class="files-card">
+                                <h3>📄 已上传文件</h3>
+                                <div id="fileList" class="file-list"></div>
+                            </div>
+                        </div>
                     </div>
-                    <div id="uploadProgress" class="upload-progress"></div>
-                    <div id="fileList" class="file-list"></div>
                 </div>
 
                 <div id="modelsPage" class="page">

@@ -9,6 +9,7 @@ const KNOWLEDGE_DIR = path.join(__dirname, '../../knowledge');
 const MODELS_FILE = path.join(__dirname, '../../data/models.json');
 const skillsCenter = require('../skills');
 const { respondToClarification, getPendingClarification, clearSessionClarifications } = require('../clarification');
+const toolExecutors = require('../sandbox/tools');
 
 let modelCache = null;
 
@@ -31,6 +32,12 @@ const INTENT_KEYWORDS = {
   get_weather: ['天气', '气温', '湿度', '下雨', '晴天', '多云', '冷', '热', '温度', '刮风', '下雨吗'],
   get_location: ['省', '市', '县', '区', '镇', '村', '位置', '在哪里', '经纬度', '海拔', '行政区划', '的人口', '面积', '哪个省', '属于哪个', '位于', '位置在哪'],
   execute_bash: ['执行', '运行', '命令', 'cmd', '终端', 'shell', 'python', '代码', '脚本', '执行命令'],
+  read_file: ['查看文件', '读取文件', '打开文件', '文件内容', '显示文件', '查看内容', '文件内容是什么', '看看这个文件', '读取', '查看'],
+  web_search: ['搜索', '网上搜索', '百度', '谷歌', '查一下', '网上查', '搜索一下', 'search'],
+  rename_bot: ['叫我', '改名', '叫', '名字是', '以后叫你', '你就叫', '以后你就叫', '以后你叫', '我以后叫你', '以后你就是我叫', '你叫', '我就叫', '从现在起你叫', '从现在开始你叫', '从现在开始，你叫', '从现在起，你叫'],
+  rename_user: ['我叫', '我是', '以后叫我', '以后你叫我', '你就叫我', '我的名字是', '我以后叫', '我以后就是'],
+  set_relationship: ['我是你的', '我是你', '以后我就是你', '以后你就是我', '是你的'],
+  ask_name: ['你叫什么', '你是谁', '你的名字', '名字', '叫什麼', '叫甚麼', '你叫什麼', '你叫甚麼', '你叫啥', '你是谁的', '你是啥'],
   general: []
 };
 
@@ -41,9 +48,153 @@ const INTENT_TO_TOOLS = {
   analyze_video: ['analyze_video', 'search_knowledge_base'],
   get_weather: ['get_weather'],
   get_location: ['get_location'],
+  read_file: ['read_file'],
+  web_search: ['web_search'],
   execute_bash: ['bash', 'python', 'ls'],
   general: ['search_knowledge_base']
 };
+
+const TOOL_EXECUTOR_MAP = {
+  'read_file': toolExecutors.read,
+  'write_file': toolExecutors.write,
+  'str_replace': toolExecutors.strReplace,
+  'bash': toolExecutors.execute,
+  'python': toolExecutors.executePythonCode,
+  'ls': toolExecutors.listDir,
+  'search_knowledge_base': null,
+  'recognize_image': null,
+  'extract_pdf_text': null,
+  'analyze_video': null,
+  'get_weather': null,
+  'get_location': null,
+  'web_search': null,
+  'ask_clarification': null
+};
+
+function parseToolCalls(aiResponse) {
+  const toolCalls = [];
+  const toolCallRegex = /<tool_call>\s*<tool name="(\w+)">([\s\S]*?)<\/tool>\s*<\/tool_call>/g;
+  
+  let match;
+  while ((match = toolCallRegex.exec(aiResponse)) !== null) {
+    const toolName = match[1];
+    const paramsStr = match[2];
+    
+    const args = {};
+    const paramRegex = /<param name="(\w+)">([^<]*)<\/param>/g;
+    let paramMatch;
+    while ((paramMatch = paramRegex.exec(paramsStr)) !== null) {
+      args[paramMatch[1]] = paramMatch[2];
+    }
+    
+    toolCalls.push({
+      name: toolName,
+      args: args,
+      raw: match[0]
+    });
+  }
+  
+  if (toolCalls.length > 0) {
+    console.log('[Tool Parser] 解析到工具调用:', toolCalls.map(t => t.name));
+  }
+  
+  return toolCalls;
+}
+
+async function executeToolCall(toolCall, modelConfig = null) {
+  const { name, args } = toolCall;
+  const executor = TOOL_EXECUTOR_MAP[name];
+  
+  if (executor === null || executor === undefined) {
+    console.log(`[Tool Executor] 使用 skillsCenter 执行工具: ${name}`);
+    if (!modelConfig) {
+      return {
+        success: false,
+        error: '需要 modelConfig 来执行此工具'
+      };
+    }
+    
+    const context = {
+      model: modelConfig.modelId || modelConfig.id,
+      apiKey: modelConfig.apiKey,
+      baseURL: modelConfig.url,
+    };
+    
+    const result = await skillsCenter.executeTool(name, args, context);
+    console.log(`[Tool Executor] 工具 ${name} 执行结果:`, result.success ? '成功' : '失败');
+    return result;
+  }
+  
+  if (!executor) {
+    console.log(`[Tool Executor] 未找到工具执行器: ${name}`);
+    return {
+      success: false,
+      error: `未知工具: ${name}`
+    };
+  }
+  
+  console.log(`[Tool Executor] 执行工具: ${name}`, args);
+  
+  try {
+    const result = await executor(args);
+    console.log(`[Tool Executor] 工具 ${name} 执行结果:`, result.success ? '成功' : '失败');
+    return result;
+  } catch (error) {
+    console.error(`[Tool Executor] 工具执行失败:`, error);
+    return {
+      success: false,
+      error: error.message
+    };
+  }
+}
+
+function buildToolResultMessage(toolCall, result) {
+  return `<tool_result>
+<tool name="${toolCall.name}">
+<result>${JSON.stringify(result)}</result>
+</tool>
+</tool_result>`;
+}
+
+async function executeToolLoop(query, systemPrompt, modelConfig, maxIterations = 3) {
+  let currentQuery = query;
+  let currentSystemPrompt = systemPrompt;
+  let iterations = 0;
+  let allToolResults = [];
+  
+  console.log('[Tool Loop] 开始工具调用循环...');
+  
+  while (iterations < maxIterations) {
+    iterations++;
+    console.log(`[Tool Loop] 第 ${iterations} 次迭代`);
+    
+    const response = await callAI(currentQuery, currentSystemPrompt, modelConfig.id);
+    
+    console.log(`[Tool Loop] AI响应:`, response.substring(0, 200));
+    
+    const toolCalls = parseToolCalls(response);
+    
+    if (toolCalls.length === 0) {
+      console.log('[Tool Loop] 无更多工具调用，返回最终响应');
+      return response;
+    }
+    
+    for (const toolCall of toolCalls) {
+      const result = await executeToolCall(toolCall, modelConfig);
+      const resultMessage = buildToolResultMessage(toolCall, result);
+      allToolResults.push({
+        tool: toolCall.name,
+        result: result
+      });
+      
+      currentQuery = '';
+      currentSystemPrompt = `${currentSystemPrompt}\n\n【工具执行结果】\n${resultMessage}\n\n请根据以上工具执行结果回答用户的问题。如果工具执行失败，请说明错误原因。`;
+    }
+  }
+  
+  console.log('[Tool Loop] 达到最大迭代次数，返回最后响应');
+  return await callAI(query, currentSystemPrompt, modelConfig.id);
+}
 
 function loadModels() {
   try {
@@ -635,8 +786,49 @@ function formatToolDescription(toolName) {
   return desc;
 }
 
-function buildSystemPrompt(selectedTools, context, originalQuery, historyContext = '') {
-  let prompt = '你是一个智能助手，名称为AIWing。\n\n';
+function buildToolDefinitionsPrompt() {
+  const toolDefs = skillsCenter.getToolDefinitions();
+  let prompt = '\n\n【可用工具】（当需要时必须使用以下工具）：\n\n';
+  
+  for (const tool of toolDefs) {
+    const fn = tool.function;
+    prompt += `【${fn.name}】\n`;
+    prompt += `功能: ${fn.description}\n`;
+    
+    const params = fn.parameters?.properties || {};
+    const paramNames = Object.keys(params);
+    if (paramNames.length > 0) {
+      prompt += `参数:\n`;
+      for (const name of paramNames) {
+        const p = params[name];
+        prompt += `  - ${name} (${p.type}): ${p.description || ''}\n`;
+      }
+    }
+    
+    prompt += '\n';
+  }
+  
+  prompt += `【重要】当你需要读取文件内容时，必须使用 read_file 工具并按照以下格式调用：\n`;
+  prompt += `<tool_call>\n<tool name="read_file">\n<param name="path">文件路径</param>\n<param name="description">读取文件原因</param>\n</tool>\n</tool_call>\n\n`;
+  
+  prompt += `当你需要执行其他操作时，也请使用相应的工具。\n`;
+  prompt += `注意：不需要输出任何其他内容，只需要输出工具调用或最终回答。\n`;
+  
+  return prompt;
+}
+
+function buildSystemPrompt(selectedTools, context, originalQuery, historyContext = '', botName = DEFAULT_BOT_NAME, userName = null, relationship = null) {
+  let prompt = `你是一个智能助手，名称为${botName}。\n\n`;
+  
+  if (relationship && RELATIONSHIPS[relationship]) {
+    const rel = RELATIONSHIPS[relationship];
+    prompt += `用户与你的关系：${rel.title}\n`;
+    prompt += `称呼方式：使用"${rel.pronouns}"称呼，保持${rel.style}的语气。\n`;
+    prompt += `请在回答中用正确的方式称呼用户（如：${rel.title}，您好 / ${rel.title}，你觉得...）。\n\n`;
+  } else if (userName) {
+    prompt += `用户名称：${userName}\n`;
+    prompt += `请在回答中适当称呼用户为"${userName}"，让对话更亲切自然。\n\n`;
+  }
 
   if (historyContext) {
     prompt += `${historyContext}\n\n`;
@@ -646,8 +838,10 @@ function buildSystemPrompt(selectedTools, context, originalQuery, historyContext
     prompt += `用户当前问题：${originalQuery}\n\n`;
   }
 
+  prompt += buildToolDefinitionsPrompt();
+
   if (context) {
-    prompt += `【已查询到的信息】：\n${context}\n\n`;
+    prompt += `\n【已查询到的信息】：\n${context}\n\n`;
     prompt += `【重要指示】：\n`;
     prompt += `1. 上面的信息是通过工具查询到的真实数据\n`;
     prompt += `2. 请基于这些信息，直接、简洁地回答用户的问题\n`;
@@ -666,20 +860,12 @@ function buildSystemPrompt(selectedTools, context, originalQuery, historyContext
 }
 
 function analyzeHistoryRelevance(currentQuery, history) {
-  if (!history || history.length === 0) {
-    return '';
-  }
+  return '';
+}
 
-  console.log('[Memory] 分析历史消息关联性...');
-  console.log('[Memory] 当前问题:', currentQuery);
+function extractKeywords(text) {
   
-  const currentKeywordsObj = extractKeywords(currentQuery);
-  const currentKeywords = currentKeywordsObj.words || [];
-  console.log('[Memory] 当前问题关键词:', currentKeywords);
-  
-  const relevantHistory = [];
-  
-  for (let i = 0; i < history.length; i++) {
+  for (let i = startIndex; i < history.length; i++) {
     const msg = history[i];
     if (msg.role !== 'user') continue;
     
@@ -718,6 +904,207 @@ function extractKeywords(text) {
   const words = text.replace(/[^\u4e00-\u9fa5a-zA-Z0-9\s]/g, ' ').split(/\s+/);
   const keywords = words.filter(w => w.length > 1 && !stopWords.includes(w.toLowerCase()));
   return [...new Set(keywords)];
+}
+
+const DEFAULT_BOT_NAME = '智能助手';
+
+const RELATIONSHIPS = {
+  '老板': {
+    title: '老板',
+    pronouns: '您',
+    style: '恭敬、专业'
+  },
+  '主人': {
+    title: '主人',
+    pronouns: '您',
+    style: '忠诚、服从'
+  },
+  '爸爸': {
+    title: '爸爸',
+    pronouns: '你',
+    style: '亲情、尊敬'
+  },
+  '妈妈': {
+    title: '妈妈',
+    pronouns: '你',
+    style: '亲情、温暖'
+  },
+  '老师': {
+    title: '老师',
+    pronouns: '您',
+    style: '尊敬、谦虚'
+  },
+  '朋友': {
+    title: '朋友',
+    pronouns: '你',
+    style: '轻松、随意'
+  },
+  '上帝': {
+    title: '上帝',
+    pronouns: '您',
+    style: '敬畏、崇拜'
+  },
+  '神': {
+    title: '神',
+    pronouns: '您',
+    style: '敬畏、崇拜'
+  },
+  'Creator': {
+    title: '创造者',
+    pronouns: '您',
+    style: '敬畏、感恩'
+  },
+  '开发者': {
+    title: '开发者',
+    pronouns: '您',
+    style: '尊敬、技术性'
+  },
+};
+
+function extractBotName(query) {
+  if (isQuestion(query)) {
+    return null;
+  }
+  
+  const patterns = [
+    /你叫([^\s，。,]{1,10})/,
+    /以后叫你([^\s，。,]{1,10})/,
+    /你以后叫([^\s，。,]{1,10})/,
+    /称呼你([^\s，。,]{1,10})/,
+    /称呼你叫([^\s，。,]{1,10})/,
+    /你就叫([^\s，。,]{1,10})/,
+    /以后我就叫([^\s，。,]{1,10})/,
+    /叫我([^\s，。,]{1,10})/,
+    /名字是([^\s，。,]{1,10})/,
+    /(?:从现在起|从现在开始|从此刻起)[，,]?(?:你|我就)叫([^\s，。,]{1,10})/,
+  ];
+  
+  for (const pattern of patterns) {
+    const match = query.match(pattern);
+    if (match && match[1]) {
+      return match[1].trim();
+    }
+  }
+  return null;
+}
+
+function isRenameIntent(query) {
+  const lowerQuery = query.toLowerCase();
+  const keywords = INTENT_KEYWORDS.rename_bot || [];
+  return keywords.some(kw => lowerQuery.includes(kw));
+}
+
+function isAskNameIntent(query) {
+  const lowerQuery = query.toLowerCase();
+  const keywords = INTENT_KEYWORDS.ask_name || [];
+  return keywords.some(kw => lowerQuery.includes(kw));
+}
+
+function isQuestion(query) {
+  const trimmed = query.trim();
+  if (!trimmed) return false;
+  
+  const questionPatternsEnd = [
+    /[谁吗呢嘛]$/,
+    /[吗呢嘛]$/,
+    /是[谁啥]$/,
+    /是谁[?？]?$/,
+    /叫什么[?？]?$/,
+    /是啥[?？]?$/,
+    /你叫.*[?？]$/,
+    /你是谁[?？]?$/,
+    /你是.*吗[?？]?$/,
+    /.*吗[?？]?$/,
+    /.*呢[?？]?$/,
+    /.*嘛[?？]?$/,
+  ];
+  
+  if (questionPatternsEnd.some(p => p.test(trimmed))) {
+    return true;
+  }
+  
+  const questionPatternsStart = [
+    /^你是谁/,
+    /^你是.*吗/,
+    /^谁.*[?？]$/,
+    /^什么.*[?？]$/,
+    /^怎[么么].*[?？]$/,
+    /^为.*什么.*[?？]$/,
+  ];
+  
+  if (questionPatternsStart.some(p => p.test(trimmed))) {
+    return true;
+  }
+  
+  return false;
+}
+
+function extractUserName(query) {
+  if (isQuestion(query)) {
+    return null;
+  }
+  
+  const patterns = [
+    /我叫([^\s，。,]{1,10})/,
+    /我是([^\s，。,]{1,10})/,
+    /我的名字是([^\s，。,]{1,10})/,
+    /以后叫我([^\s，。,]{1,10})/,
+  ];
+  
+  for (const pattern of patterns) {
+    const match = query.match(pattern);
+    if (match && match[1]) {
+      return match[1].trim();
+    }
+  }
+  return null;
+}
+
+function isRenameUserIntent(query) {
+  const lowerQuery = query.toLowerCase();
+  const keywords = INTENT_KEYWORDS.rename_user || [];
+  return keywords.some(kw => lowerQuery.includes(kw));
+}
+
+function extractRelationship(query) {
+  if (isQuestion(query)) {
+    return null;
+  }
+  
+  const patterns = [
+    /你叫我([^\s，。,]{1,10})/,
+    /以后叫我([^\s，。,]{1,10})/,
+    /以后你叫我([^\s，。,]{1,10})/,
+    /你以后叫我([^\s，。,]{1,10})/,
+    /称呼我为([^\s，。,]{1,10})/,
+    /称呼我([^\s，。,]{1,10})/,
+    /我是你的([^\s，。,]{1,10})/,
+    /我是你([^\s，。,]{1,10})/,
+  ];
+  
+  for (const pattern of patterns) {
+    const match = query.match(pattern);
+    if (match && match[1]) {
+      let rel = match[1].trim();
+      rel = rel.replace(/[，。,?!?？!]/g, '').trim();
+      if (rel.length >= 1 && rel.length <= 10) {
+        if (RELATIONSHIPS[rel]) {
+          return rel;
+        }
+        if (Object.values(RELATIONSHIPS).some(r => r.title === rel)) {
+          return rel;
+        }
+        return rel;
+      }
+    }
+  }
+  return null;
+}
+
+function isSetRelationshipIntent(query) {
+  const lowerQuery = query.toLowerCase();
+  const keywords = INTENT_KEYWORDS.set_relationship || [];
+  return keywords.some(kw => lowerQuery.includes(kw));
 }
 
 function getNGrams(text, n = 2) {
@@ -1372,16 +1759,86 @@ function formatToolResults(toolResults) {
 
 router.post('/', async (req, res) => {
   try {
-    const { query, mode, model: modelId, history = [] } = req.body;
+    const { query, mode, model: modelId, history = [], botName: clientBotName, userName: clientUserName, relationship: clientRelationship } = req.body;
 
     console.log('[Chat] ==================== 收到请求 ====================');
     console.log('[Chat] 用户输入:', query);
     console.log('[Chat] 模式:', mode);
     console.log('[Chat] 模型:', modelId);
     console.log('[Chat] 历史消息数:', history.length);
+    console.log('[Chat] 客户端智能体名称:', clientBotName);
+    console.log('[Chat] 客户端用户名称:', clientUserName);
+    console.log('[Chat] 客户端用户关系:', clientRelationship);
+
+    const botName = clientBotName || DEFAULT_BOT_NAME;
+    const userName = clientUserName || null;
+    const relationship = clientRelationship || null;
 
     if (!query || !mode || !modelId) {
       return res.status(400).json({ error: '缺少必要参数' });
+    }
+
+    if (isSetRelationshipIntent(query) && !isQuestion(query)) {
+      const newRel = extractRelationship(query);
+      if (newRel) {
+        console.log('[Chat] 检测到关系设定，新关系:', newRel);
+        return res.json({
+          response: `好的，明白了！从现在起，你就是我的${RELATIONSHIPS[newRel]?.title || newRel}，我会用正确的方式称呼你。有什么需要我帮忙的吗？`,
+          source: '系统',
+          newRelationship: newRel
+        });
+      }
+    }
+
+    if (isRenameUserIntent(query) && !isQuestion(query)) {
+      const newName = extractUserName(query);
+      if (newName) {
+        console.log('[Chat] 检测到用户改名意图，新名称:', newName);
+        return res.json({
+          response: `好的，我以后就叫你"${newName}"了！有什么可以帮你的吗？`,
+          source: '系统',
+          newUserName: newName
+        });
+      }
+    }
+
+    if (isRenameIntent(query)) {
+      const newName = extractBotName(query);
+      if (newName) {
+        console.log('[Chat] 检测到改名意图，新名称:', newName);
+        return res.json({
+          response: `好的，以后我就叫"${newName}"了！有什么需要我帮忙的吗？`,
+          source: '系统',
+          newBotName: newName
+        });
+      }
+    }
+
+    if (isAskNameIntent(query)) {
+      console.log('[Chat] 检测到询问名称意图，当前名称:', botName);
+      return res.json({
+        response: `我叫${botName}，是你的智能助手。有什么可以帮你的吗？`,
+        source: '系统'
+      });
+    }
+
+    let updates = {};
+    if (!isQuestion(query)) {
+      const newBotName = extractBotName(query);
+      if (newBotName) {
+        updates.newBotName = newBotName;
+        console.log('[Chat] 检测到智能体改名:', newBotName);
+      }
+      const newUserName = extractUserName(query);
+      if (newUserName) {
+        updates.newUserName = newUserName;
+        console.log('[Chat] 检测到用户改名:', newUserName);
+      }
+      const newRel = extractRelationship(query);
+      if (newRel) {
+        updates.newRelationship = newRel;
+        console.log('[Chat] 检测到关系设定:', newRel);
+      }
     }
 
     const models = getModels();
@@ -1393,7 +1850,7 @@ router.post('/', async (req, res) => {
 
     let response = '';
     let source = '';
-    const historyContext = analyzeHistoryRelevance(query, history);
+    const historyContext = '';
 
     if (mode === 'ai') {
       console.log('[Chat] 处理用户请求:', query);
@@ -1402,11 +1859,11 @@ router.post('/', async (req, res) => {
 
       if (matchedIntents.length === 0) {
         console.log('[Chat] 未匹配到任何技能，直接发送问题给大模型');
-        const systemPrompt = buildSystemPrompt([], '', query, historyContext);
+        const systemPrompt = buildSystemPrompt([], '', query, historyContext, botName, userName, relationship);
         console.log('[Prompt Assembler] System Prompt:');
         console.log(systemPrompt);
         console.log('='.repeat(60));
-        response = await callAI(query, systemPrompt, modelId);
+        response = await executeToolLoop(query, systemPrompt, modelConfig);
         source = 'AI';
       } else {
         console.log('[Chat] 匹配到意图:', matchedIntents);
@@ -1472,11 +1929,11 @@ router.post('/', async (req, res) => {
           }).join('\n\n');
         }
 
-        const systemPrompt = buildSystemPrompt(selectedTools, context, query, historyContext);
+        const systemPrompt = buildSystemPrompt(selectedTools, context, query, historyContext, botName, userName, relationship);
         console.log('[Prompt Assembler] 组装后的 System Prompt:');
         console.log(systemPrompt);
         console.log('='.repeat(60));
-        response = await callAI(query, systemPrompt, modelId);
+        response = await executeToolLoop(query, systemPrompt, modelConfig);
         source = allResults.length > 0 ? 'AI + Tools' : 'AI';
       }
     } else if (mode === 'knowledge' || mode === 'hybrid') {
@@ -1503,11 +1960,11 @@ router.post('/', async (req, res) => {
           source = '知识库';
         } else {
           console.log('[Chat] 知识库无结果，但模式为hybrid，继续调用大模型');
-          const systemPrompt = buildSystemPrompt(selectedTools, '', query, historyContext);
+          const systemPrompt = buildSystemPrompt(selectedTools, '', query, historyContext, botName, userName, relationship);
           console.log('[Prompt Assembler] 组装后的 System Prompt:');
           console.log(systemPrompt);
           console.log('='.repeat(60));
-          response = await callAI(query, systemPrompt, modelId);
+          response = await executeToolLoop(query, systemPrompt, modelConfig);
           source = '混合';
         }
       } else {
@@ -1519,24 +1976,27 @@ router.post('/', async (req, res) => {
           return `【${r.filename}】${skillTag}\n${r.content}`;
         }).join('\n\n');
 
-        const systemPrompt = buildSystemPrompt(selectedTools, context, query, historyContext);
+        const systemPrompt = buildSystemPrompt(selectedTools, context, query, historyContext, botName, userName, relationship);
         console.log('[Prompt Assembler] 组装后的 System Prompt:');
         console.log(systemPrompt);
         console.log('='.repeat(60));
-        response = await callAI(query, systemPrompt, modelId);
+        response = await executeToolLoop(query, systemPrompt, modelConfig);
         source = mode === 'knowledge' ? '知识库' : '混合';
       }
     }
 
-    console.log('[Chat] 最终响应:');
-    console.log('  response:', response);
-    console.log('  source:', source);
-    console.log('='.repeat(60));
-
-    res.json({
-      response,
-      source
-    });
+    if (Object.keys(updates).length > 0) {
+      res.json({
+        response,
+        source,
+        ...updates
+      });
+    } else {
+      res.json({
+        response,
+        source
+      });
+    }
   } catch (error) {
     console.error('聊天错误:', error);
     res.status(500).json({ error: error.message });

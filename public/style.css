@@ -752,6 +752,141 @@ button:hover {
     overflow-y: auto;
 }
 
+.knowledge-container {
+    display: flex;
+    gap: 20px;
+    flex: 1;
+    overflow: hidden;
+}
+
+.knowledge-left {
+    width: 45%;
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+    overflow-y: auto;
+}
+
+.knowledge-right {
+    width: 55%;
+    display: flex;
+    flex-direction: column;
+}
+
+.upload-card, .files-card, .tools-card {
+    background: var(--bg-card);
+    border-radius: 12px;
+    padding: 15px;
+    box-shadow: var(--shadow-card);
+}
+
+.upload-card h3, .files-card h3 {
+    margin: 0 0 15px 0;
+    color: var(--text-primary);
+    font-size: 1rem;
+}
+
+.tools-card .tools-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    cursor: pointer;
+    padding: 10px 0;
+}
+
+.tools-card .tools-header h3 {
+    margin: 0;
+    color: var(--text-primary);
+    font-size: 1rem;
+}
+
+.toggle-icon {
+    color: var(--text-secondary);
+    font-size: 0.8rem;
+    transition: transform 0.3s;
+}
+
+.tools-docs {
+    margin-top: 10px;
+}
+
+.tools-docs.collapsed {
+    display: none;
+}
+
+.tools-docs-content {
+    display: block;
+}
+
+.tool-doc {
+    padding: 10px;
+    background: var(--bg-hover);
+    border-radius: 6px;
+    text-align: center;
+}
+
+.tool-doc h4 {
+    margin: 0 0 5px 0;
+    color: #667eea;
+    font-size: 0.85rem;
+}
+
+.tool-doc p {
+    margin: 0;
+    color: var(--text-secondary);
+    font-size: 0.75rem;
+}
+
+.trigger-hint {
+    margin-top: 4px !important;
+    font-size: 0.7rem !important;
+    color: #888 !important;
+}
+
+.usage-hint {
+    margin-top: 4px !important;
+    font-size: 0.7rem !important;
+    color: #667eea !important;
+}
+
+.doc-section {
+    margin-bottom: 15px;
+}
+
+.doc-section h4 {
+    margin: 0 0 10px 0;
+    color: var(--text-primary);
+    font-size: 0.95rem;
+}
+
+.doc-category {
+    margin: 8px 0 5px 0;
+}
+
+.category-label {
+    font-size: 0.75rem;
+    color: #667eea;
+    font-weight: 600;
+}
+
+.doc-items {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 8px;
+}
+
+.files-card {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+.files-card .file-list {
+    flex: 1;
+    overflow-y: auto;
+}
+
 .toast-message {
     position: fixed;
     top: 20px;

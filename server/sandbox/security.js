@@ -10,6 +10,32 @@ const ALLOWED_SYSTEM_PATHS = [
   '/dev/',
 ];
 
+const WINDOWS_PATH_MAP = {
+  'C:\\Users': '/mnt/user-data/downloads',
+  'D:\\Users': '/mnt/user-data/downloads',
+  'E:\\Users': '/mnt/user-data/downloads',
+  'C:/Users': '/mnt/user-data/downloads',
+  'D:/Users': '/mnt/user-data/downloads',
+  'E:/Users': '/mnt/user-data/downloads',
+  '/Users': '/mnt/user-data/downloads',
+};
+
+function convertWindowsPath(targetPath) {
+  if (!targetPath) return targetPath;
+  
+  const isWindows = targetPath.includes(':\\') || targetPath.includes(':/');
+  if (!isWindows) return targetPath;
+  
+  for (const [winPath, virtualPath] of Object.entries(WINDOWS_PATH_MAP)) {
+    if (targetPath.startsWith(winPath)) {
+      const relativePath = targetPath.substring(winPath.length).replace(/\\/g, '/');
+      return virtualPath + relativePath;
+    }
+  }
+  
+  return targetPath;
+}
+
 const DANGEROUS_COMMANDS = [
   'rm -rf /',
   'mkfs',
@@ -179,6 +205,7 @@ module.exports = {
   getAllowedRoots,
   isPathAllowed,
   checkCommandSafety,
+  convertWindowsPath,
   VIRTUAL_PATH_PREFIX,
   ALLOWED_SYSTEM_PATHS,
   ALLOWED_EXTENSIONS

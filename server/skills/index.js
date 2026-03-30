@@ -7,6 +7,7 @@ const VideosSkill = require('./videos-skill');
 const PdfsSkill = require('./pdfs-skill');
 const WeatherSkill = require('./weather-skill');
 const LocationSkill = require('./location-skill');
+const WebSearchSkill = require('./web-search-skill');
 
 const sandbox = require('../sandbox/tools');
 const { askClarification, getPendingClarification, respondToClarification, clearClarification } = require('../clarification');
@@ -133,18 +134,39 @@ const toolDefinitions = [
   {
     type: 'function',
     function: {
+      name: 'web_search',
+      description: '通过搜索引擎在互联网上搜索信息，返回网页标题、链接和摘要',
+      parameters: {
+        type: 'object',
+        properties: {
+          query: {
+            type: 'string',
+            description: '搜索关键词或问题，如：Python 教程、北京天气',
+          },
+          max_results: {
+            type: 'integer',
+            description: '最大返回结果数，默认为 5',
+          },
+        },
+        required: ['query'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
       name: 'bash',
-      description: '在沙盒环境中执行 Shell 命令。优先使用 python 来运行 Python 代码',
+      description: '在沙盒环境中执行 Shell 命令（Windows CMD 或 Linux Bash）。可以执行各种系统命令、脚本等。注意：优先使用 python 工具来运行 Python 代码',
       parameters: {
         type: 'object',
         properties: {
           command: {
             type: 'string',
-            description: '要执行的 bash 命令，使用绝对路径访问文件',
+            description: '要执行的完整命令字符串。例如：echo "Hello" 或 dir 或 ls -la',
           },
           description: {
             type: 'string',
-            description: '简短说明为什么要执行这个命令',
+            description: '简短说明执行这个命令的目的和用途',
           },
         },
         required: ['command', 'description'],
@@ -155,17 +177,17 @@ const toolDefinitions = [
     type: 'function',
     function: {
       name: 'python',
-      description: '执行 Python 代码，在沙盒环境中运行',
+      description: '在沙盒环境中执行 Python 代码。适合进行计算、数据处理、文件操作等。注意：只支持 Python，不支持其他编程语言',
       parameters: {
         type: 'object',
         properties: {
           code: {
             type: 'string',
-            description: '要执行的 Python 代码',
+            description: '完整的 Python 代码。例如：print("Hello World") 或 import json; data = {"key": "value"}',
           },
           description: {
             type: 'string',
-            description: '简短说明为什么要执行这段代码',
+            description: '简短说明这段 Python 代码的目的',
           },
         },
         required: ['code', 'description'],
@@ -176,13 +198,13 @@ const toolDefinitions = [
     type: 'function',
     function: {
       name: 'ls',
-      description: '列出目录内容，以树形结构显示',
+      description: '列出指定目录的内容（文件和文件夹），以树形结构显示',
       parameters: {
         type: 'object',
         properties: {
           path: {
             type: 'string',
-            description: '要列出的目录绝对路径',
+            description: '要列出的目录路径。使用虚拟路径：/mnt/user-data/workspace（工作目录）、/mnt/user-data/uploads（上传目录）',
           },
           description: {
             type: 'string',
@@ -197,21 +219,21 @@ const toolDefinitions = [
     type: 'function',
     function: {
       name: 'read_file',
-      description: '读取文本文件内容，可以指定行号范围',
+      description: '读取文本文件的内容。可以指定行号范围来只读取部分内容。适合查看代码文件、配置文件、文档等',
       parameters: {
         type: 'object',
         properties: {
           path: {
             type: 'string',
-            description: '要读取的文件绝对路径',
+            description: '要读取的文件路径。使用虚拟路径：/mnt/user-data/workspace/文件名',
           },
           start_line: {
             type: 'integer',
-            description: '可选，起始行号（1-indexed）',
+            description: '可选，起始行号（1-indexed）。例如：1 表示从第一行开始',
           },
           end_line: {
             type: 'integer',
-            description: '可选，结束行号（1-indexed）',
+            description: '可选，结束行号。例如：100 表示读取到第100行',
           },
           description: {
             type: 'string',
@@ -226,25 +248,25 @@ const toolDefinitions = [
     type: 'function',
     function: {
       name: 'write_file',
-      description: '写入文本内容到文件',
+      description: '创建新文件或覆盖/追加内容到已有文件。适合生成代码文件、保存数据、创建配置文件等',
       parameters: {
         type: 'object',
         properties: {
           path: {
             type: 'string',
-            description: '要写入的文件绝对路径',
+            description: '要写入的文件路径。使用虚拟路径：/mnt/user-data/workspace/文件名',
           },
           content: {
             type: 'string',
-            description: '要写入的内容',
+            description: '要写入的文件内容。可以是文本、代码、JSON 等',
           },
           append: {
             type: 'boolean',
-            description: '是否追加模式，默认为 false（覆盖）',
+            description: '可选，追加模式。true=在文件末尾追加，false=覆盖整个文件（默认）',
           },
           description: {
             type: 'string',
-            description: '简短说明为什么要写入这个文件',
+            description: '简短说明写入这个文件的目的',
           },
         },
         required: ['path', 'content', 'description'],
@@ -255,17 +277,17 @@ const toolDefinitions = [
     type: 'function',
     function: {
       name: 'str_replace',
-      description: '替换文件中的字符串',
+      description: '替换文件中的指定字符串。可以用于修改代码、配置文件等。支持单次替换或全部替换',
       parameters: {
         type: 'object',
         properties: {
           path: {
             type: 'string',
-            description: '要修改的文件绝对路径',
+            description: '要修改的文件路径。使用虚拟路径：/mnt/user-data/workspace/文件名',
           },
           old_str: {
             type: 'string',
-            description: '要替换的原始字符串',
+            description: '要替换的原始字符串（需要精确匹配）。可以使用多行字符串',
           },
           new_str: {
             type: 'string',
@@ -273,7 +295,7 @@ const toolDefinitions = [
           },
           replace_all: {
             type: 'boolean',
-            description: '是否替换所有匹配项，默认为 false',
+            description: '可选，是否替换所有匹配项。true=全部替换，false=只替换第一个（默认）',
           },
           description: {
             type: 'string',
@@ -356,6 +378,7 @@ class SkillsCenter {
     this.register(new PdfsSkill());
     this.register(new WeatherSkill());
     this.register(new LocationSkill());
+    this.register(new WebSearchSkill());
 
     console.log(`[SkillsCenter] 已注册 ${this.skills.size} 个技能`);
   }
@@ -405,6 +428,72 @@ class SkillsCenter {
       skillsInfo.push(skill.getInfo());
     });
     return skillsInfo;
+  }
+
+  getSkillsByCategory() {
+    return {
+      file_processing: [
+        { 
+          name: 'images-skill', 
+          description: '图片识别/OCR - 提取图片中的文字和内容', 
+          trigger: '上传图片文件或提到"图片"、"照片"、"截图"、"OCR"、"识别文字"等关键词',
+          usage: '上传 .jpg/.png/.gif 等图片文件，AI 自动识别图片内容'
+        },
+        { 
+          name: 'videos-skill', 
+          description: '视频内容理解 - 分析视频关键帧和场景', 
+          trigger: '上传视频文件或提到"视频"、"录像"、"影片"、"movie"等关键词',
+          usage: '上传 .mp4/.avi/.mov 等视频文件，AI 自动分析视频内容'
+        },
+        { 
+          name: 'pdfs-skill', 
+          description: 'PDF解析 - 提取PDF文档内容和结构', 
+          trigger: '上传 PDF 文件或提到"PDF"、"文档"、"文章"、"合同"等关键词',
+          usage: '上传 .pdf 文件，AI 自动提取文档内容'
+        }
+      ],
+      info_query: [
+        { 
+          name: 'weather-skill', 
+          description: '天气查询 - 查询城市天气信息', 
+          trigger: '提到"天气"、"气温"、"温度"、"下雨"、"晴天"、"多云"、"冷"、"热"等',
+          usage: '直接询问如"北京天气怎么样"、"今天会下雨吗"'
+        },
+        { 
+          name: 'location-skill', 
+          description: '地理位置 - 查询省市区县等行政区划', 
+          trigger: '提到省、市、县、区、镇、村或"位置"、"在哪里"、"经纬度"、"行政区划"等',
+          usage: '直接询问如"北京市属于哪个省"、"深圳的经纬度是多少"'
+        }
+      ]
+    };
+  }
+
+  getToolsWithDescriptions() {
+    return [
+      {
+        category: '代码执行',
+        tools: [
+          { name: 'bash', description: '执行 Shell 命令（Windows CMD / Linux Bash）', trigger: '用户说"执行"、"运行"、"命令"、"shell"等' },
+          { name: 'python', description: '执行 Python 代码', trigger: '用户说"python"、"代码"、"执行"等' }
+        ]
+      },
+      {
+        category: '文件操作',
+        tools: [
+          { name: 'ls', description: '列出目录内容', trigger: '用户说"查看目录"、"列出文件"等' },
+          { name: 'read_file', description: '读取文件内容', trigger: '用户说"查看文件"、"读取"、"看内容"等' },
+          { name: 'write_file', description: '写入文件内容', trigger: '用户说"创建文件"、"写入"、"保存"等' },
+          { name: 'str_replace', description: '替换文件中的字符串', trigger: '用户说"修改"、"替换"、"改内容"等' }
+        ]
+      },
+      {
+        category: '辅助功能',
+        tools: [
+          { name: 'ask_clarification', description: '请求用户澄清信息', trigger: '需要更多上下文时自动触发' }
+        ]
+      }
+    ];
   }
 
   getToolDefinitions() {
@@ -618,6 +707,18 @@ class SkillsCenter {
             };
           }
           const result = await weatherSkill.process(args.query || args.city || '', context);
+          return result;
+        }
+
+        case 'web_search': {
+          const webSearchSkill = this.get('web-search-skill');
+          if (!webSearchSkill) {
+            return {
+              success: false,
+              error: '网页搜索技能未注册',
+            };
+          }
+          const result = await webSearchSkill.search(args.query, { maxResults: args.max_results || 5 });
           return result;
         }
 

@@ -31,6 +31,8 @@ app.get('/api/skills', (req, res) => {
   res.json({
     success: true,
     skills: skillsCenter.getAllSkillsInfo(),
+    skillsByCategory: skillsCenter.getSkillsByCategory(),
+    toolsWithDescriptions: skillsCenter.getToolsWithDescriptions(),
     supportedExtensions: skillsCenter.getSupportedExtensions(),
   });
 });

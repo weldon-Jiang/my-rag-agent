@@ -84,11 +84,17 @@ async function listDir(args, context = {}) {
 }
 
 async function read(args, context = {}) {
-  const { path: filePath, start_line: startLine, end_line: endLine, description = '' } = args;
+  let { path: filePath, start_line: startLine, end_line: endLine, description = '' } = args;
   
   console.log(`[read_file tool] Reading file: ${filePath}`);
   
   try {
+    const convertedPath = security.convertWindowsPath(filePath);
+    if (convertedPath !== filePath) {
+      console.log(`[read_file tool] Converted Windows path: ${filePath} -> ${convertedPath}`);
+      filePath = convertedPath;
+    }
+    
     security.validatePath(filePath);
     
     const result = executor.readFile(filePath, { startLine, endLine });
