@@ -1,4 +1,4 @@
-const BaseSkill = require('./base-skill');
+﻿const BaseSkill = require('../base-skill');
 const axios = require('axios');
 
 class WebSearchSkill extends BaseSkill {
@@ -117,3 +117,5 @@ class WebSearchSkill extends BaseSkill {
 }
 
 module.exports = WebSearchSkill;
+
+

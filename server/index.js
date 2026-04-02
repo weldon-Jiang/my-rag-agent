@@ -101,5 +101,5 @@ app.get('/', (req, res) => {
 
 app.listen(PORT, () => {
   console.log(`服务器运行在 http://localhost:${PORT}`);
-  console.log(`技能系统已初始化，支持 ${skillsCenter.getAllSkillsInfo().length} 个技能`);
+  console.log(`技能系统已初始化，支持 ${skillsCenter.getAllSkills().length} 个技能`);
 });

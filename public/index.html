@@ -19,6 +19,10 @@
                     <span class="menu-icon">📚</span>
                     <span>知识库管理</span>
                 </div>
+                <div class="menu-item" data-page="skill-tools">
+                    <span class="menu-icon">🛠️</span>
+                    <span>技能工具管理</span>
+                </div>
                 <div class="menu-item" data-page="models">
                     <span class="menu-icon">⚙️</span>
                     <span>模型管理</span>
@@ -83,46 +87,28 @@
                                 </div>
                                 <div id="uploadProgress" class="upload-progress"></div>
                             </div>
-                            <div class="tools-card">
-                                <div class="tools-header" onclick="toggleToolsDocs()">
-                                    <h3>🛠️ 可用工具说明</h3>
-                                    <span class="toggle-icon">▼</span>
-                                </div>
-                                <div class="tools-docs" id="toolsDocs">
-                                    <div class="tools-docs-content">
-                                        <div class="tool-doc">
-                                            <h4>bash</h4>
-                                            <p>执行 Shell 命令</p>
-                                        </div>
-                                        <div class="tool-doc">
-                                            <h4>python</h4>
-                                            <p>执行 Python 代码</p>
-                                        </div>
-                                        <div class="tool-doc">
-                                            <h4>ls</h4>
-                                            <p>列出目录内容</p>
-                                        </div>
-                                        <div class="tool-doc">
-                                            <h4>read_file</h4>
-                                            <p>读取文件</p>
-                                        </div>
-                                        <div class="tool-doc">
-                                            <h4>write_file</h4>
-                                            <p>写入文件</p>
-                                        </div>
-                                        <div class="tool-doc">
-                                            <h4>str_replace</h4>
-                                            <p>替换字符串</p>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
                         </div>
                         <div class="knowledge-right">
                             <div class="files-card">
                                 <h3>📄 已上传文件</h3>
                                 <div id="fileList" class="file-list"></div>
                             </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="skillToolsPage" class="page">
+                    <h2>🛠️ 技能工具管理</h2>
+                    <div class="skill-tools-tabs">
+                        <button class="tab-btn active" data-tab="skills">📦 技能</button>
+                        <button class="tab-btn" data-tab="tools">🛠️ 工具</button>
+                    </div>
+                    <div class="skill-tools-container">
+                        <div class="tab-content active" id="skillsTab">
+                            <div class="skill-list" id="skillsList"></div>
+                        </div>
+                        <div class="tab-content" id="toolsTab">
+                            <div class="tool-list" id="toolsList"></div>
                         </div>
                     </div>
                 </div>

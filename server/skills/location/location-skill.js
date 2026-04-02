@@ -1,5 +1,5 @@
-const axios = require('axios');
-const BaseSkill = require('./base-skill');
+﻿const axios = require('axios');
+const BaseSkill = require('../base-skill');
 
 class LocationSkill extends BaseSkill {
   constructor() {
@@ -169,3 +169,5 @@ class LocationSkill extends BaseSkill {
 }
 
 module.exports = LocationSkill;
+
+

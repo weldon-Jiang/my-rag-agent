@@ -1,5 +1,5 @@
-const axios = require('axios');
-const BaseSkill = require('./base-skill');
+﻿const axios = require('axios');
+const BaseSkill = require('../base-skill');
 
 const WEATHER_CODES = {
   0: '晴',
@@ -424,3 +424,5 @@ class WeatherSkill extends BaseSkill {
 }
 
 module.exports = WeatherSkill;
+
+

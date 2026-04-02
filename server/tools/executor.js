@@ -55,7 +55,17 @@ async function executeCommand(command, options = {}) {
 
   try {
     const validatedCommand = security.validateBashCommand(command);
-    const actualCommand = skipPathReplace ? validatedCommand : replaceVirtualPath(validatedCommand);
+
+    let actualCommand = skipPathReplace ? validatedCommand : replaceVirtualPath(validatedCommand);
+
+    const isWindows = process.platform === 'win32';
+    if (isWindows) {
+      const mkdirMatch = actualCommand.match(/^\s*mkdir\s+(.+)/i);
+      if (mkdirMatch) {
+        const dirPath = mkdirMatch[1].trim();
+        actualCommand = `if not exist "${dirPath}" mkdir "${dirPath}"`;
+      }
+    }
 
     console.log(`[Bash Executor] Executing: ${actualCommand}`);
 
@@ -64,21 +74,33 @@ async function executeCommand(command, options = {}) {
       let stdout = '';
       let stderr = '';
 
-      const shell = process.platform === 'win32' ? 'cmd.exe' : '/bin/bash';
-      const shellArgs = process.platform === 'win32' ? ['/c', actualCommand] : ['-c', actualCommand];
+      let finalCommand = actualCommand;
+      if (isWindows) {
+        finalCommand = `chcp 65001 >nul 2>&1 && ${actualCommand}`;
+      }
+      const shell = isWindows ? 'cmd.exe' : '/bin/bash';
+      const shellArgs = isWindows ? ['/c', finalCommand] : ['-c', actualCommand];
 
-      const proc = spawn(shell, shellArgs, {
+      const spawnOptions = {
         cwd: WORKSPACE_DIR,
         env: { ...process.env },
-        timeout
-      });
+        timeout,
+        windowsHide: true
+      };
+
+      if (isWindows) {
+        spawnOptions.shell = true;
+        spawnOptions.windowsVerbatimArguments = true;
+      }
+
+      const proc = spawn(shell, shellArgs, spawnOptions);
 
       proc.stdout.on('data', (data) => {
-        stdout += data.toString();
+        stdout += data.toString('utf8');
       });
 
       proc.stderr.on('data', (data) => {
-        stderr += data.toString();
+        stderr += data.toString('utf8');
       });
 
       proc.on('error', (error) => {
@@ -264,7 +286,8 @@ function writeFile(filePath, content, options = {}) {
 
   try {
     const validatedPath = security.validatePath(filePath);
-    const actualPath = replaceVirtualPath(validatedPath);
+    const isWindowsPath = /^[A-Za-z]:[/\\]/.test(validatedPath);
+    const actualPath = isWindowsPath ? validatedPath : replaceVirtualPath(validatedPath);
 
     const dir = path.dirname(actualPath);
     if (!fs.existsSync(dir)) {
@@ -280,7 +303,7 @@ function writeFile(filePath, content, options = {}) {
     return {
       success: true,
       path: validatedPath,
-      message: append ? 'Content appended' : 'File written'
+      message: append ? 'Content appended successfully' : 'File created successfully'
     };
   } catch (error) {
     return {
@@ -295,7 +318,8 @@ function strReplace(filePath, oldStr, newStr, options = {}) {
 
   try {
     const validatedPath = security.validatePath(filePath);
-    const actualPath = replaceVirtualPath(validatedPath);
+    const isWindowsPath = /^[A-Za-z]:[/\\]/.test(validatedPath);
+    const actualPath = isWindowsPath ? validatedPath : replaceVirtualPath(validatedPath);
 
     if (!fs.existsSync(actualPath)) {
       return { success: false, error: `File not found: ${filePath}` };
@@ -323,7 +347,7 @@ function strReplace(filePath, oldStr, newStr, options = {}) {
       success: true,
       path: validatedPath,
       replacements: occurrences,
-      message: `Replaced ${occurrences} occurrence(s)`
+      message: `Replaced ${occurrences} occurrence(s) successfully`
     };
   } catch (error) {
     return {

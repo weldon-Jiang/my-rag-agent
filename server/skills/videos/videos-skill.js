@@ -1,4 +1,4 @@
-const BaseSkill = require('./base-skill');
+﻿const BaseSkill = require('../base-skill');
 const path = require('path');
 const fs = require('fs');
 const axios = require('axios');
@@ -171,3 +171,4 @@ class VideosSkill extends BaseSkill {
 }
 
 module.exports = VideosSkill;
+

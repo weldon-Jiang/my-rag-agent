@@ -1,4 +1,4 @@
-const BaseSkill = require('./base-skill');
+﻿const BaseSkill = require('../base-skill');
 const path = require('path');
 const fs = require('fs');
 const axios = require('axios');
@@ -259,3 +259,4 @@ class ImagesSkill extends BaseSkill {
 }
 
 module.exports = ImagesSkill;
+
