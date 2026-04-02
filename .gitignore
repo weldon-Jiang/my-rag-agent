@@ -2,3 +2,5 @@ node_modules/
 .env
 knowledge/
 data/
+electron/
+documents/

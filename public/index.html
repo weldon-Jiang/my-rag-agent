@@ -19,6 +19,10 @@
                     <span class="menu-icon">📚</span>
                     <span>知识库管理</span>
                 </div>
+                <div class="menu-item" data-page="skill-tools">
+                    <span class="menu-icon">🛠️</span>
+                    <span>技能工具管理</span>
+                </div>
                 <div class="menu-item" data-page="models">
                     <span class="menu-icon">⚙️</span>
                     <span>模型管理</span>
@@ -64,20 +68,49 @@
                 </div>
 
                 <div id="knowledgePage" class="page">
-                    <div class="upload-area">
-                        <div class="upload-dropzone" id="uploadDropzone">
-                            <div class="dropzone-content">
-                                <div class="dropzone-icon">📁</div>
-                                <p>点击选择文件或拖拽文件到此处</p>
-                                <p class="dropzone-hint">单个文件不超过100MB</p>
-                                <input type="file" id="fileInput" multiple style="display: none;">
+                    <h2>📚 知识库管理</h2>
+                    <div class="knowledge-container">
+                        <div class="knowledge-left">
+                            <div class="upload-card">
+                                <h3>上传文件</h3>
+                                <div class="upload-area">
+                                    <div class="upload-dropzone" id="uploadDropzone">
+                                        <div class="dropzone-content">
+                                            <div class="dropzone-icon">📁</div>
+                                            <p>点击选择文件或拖拽文件到此处</p>
+                                            <p class="dropzone-hint">单个文件不超过100MB</p>
+                                            <input type="file" id="fileInput" multiple style="display: none;">
+                                        </div>
+                                    </div>
+                                    <div class="selected-files" id="selectedFiles"></div>
+                                    <button id="uploadBtn" class="upload-btn" disabled>上传文件</button>
+                                </div>
+                                <div id="uploadProgress" class="upload-progress"></div>
                             </div>
                         </div>
-                        <div class="selected-files" id="selectedFiles"></div>
-                        <button id="uploadBtn" class="upload-btn" disabled>上传文件</button>
+                        <div class="knowledge-right">
+                            <div class="files-card">
+                                <h3>📄 已上传文件</h3>
+                                <div id="fileList" class="file-list"></div>
+                            </div>
+                        </div>
                     </div>
-                    <div id="uploadProgress" class="upload-progress"></div>
-                    <div id="fileList" class="file-list"></div>
+                </div>
+
+                <div id="skillToolsPage" class="page">
+                    <h2>🛠️ 技能工具管理</h2>
+                    <div class="skill-tools-tabs">
+                        <button class="tab-btn active" data-tab="skills">📦 技能</button>
+                        <button class="tab-btn" data-tab="tools">🛠️ 工具</button>
+                    </div>
+                    <div class="skill-tools-container">
+                        <div class="tab-content active" id="skillsTab">
+                            <div class="skill-list" id="skillsList"></div>
+                        </div>
+                        <div class="tab-content" id="toolsTab">
+                            <div class="tool-list" id="toolsList"></div>
+                        </div>
+                    </div>
                 </div>
 
                 <div id="modelsPage" class="page">

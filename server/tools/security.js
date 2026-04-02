@@ -10,6 +10,36 @@ const ALLOWED_SYSTEM_PATHS = [
   '/dev/',
 ];
 
+const WINDOWS_PATH_MAP = {
+  'C:\\Users': '/mnt/user-data/downloads',
+  'D:\\Users': '/mnt/user-data/downloads',
+  'E:\\Users': '/mnt/user-data/downloads',
+  'C:/Users': '/mnt/user-data/downloads',
+  'D:/Users': '/mnt/user-data/downloads',
+  'E:/Users': '/mnt/user-data/downloads',
+  '/Users': '/mnt/user-data/downloads',
+};
+
+function convertWindowsPath(targetPath) {
+  if (!targetPath) return targetPath;
+
+  const isWindows = targetPath.includes(':\\') || targetPath.includes(':/');
+  if (!isWindows) return targetPath;
+
+  if (/^[A-Za-z]:[/\\]/.test(targetPath)) {
+    return targetPath;
+  }
+
+  for (const [winPath, virtualPath] of Object.entries(WINDOWS_PATH_MAP)) {
+    if (targetPath.startsWith(winPath)) {
+      const relativePath = targetPath.substring(winPath.length).replace(/\\/g, '/');
+      return virtualPath + relativePath;
+    }
+  }
+
+  return targetPath;
+}
+
 const DANGEROUS_COMMANDS = [
   'rm -rf /',
   'mkfs',
@@ -43,6 +73,8 @@ function rejectPathTraversal(targetPath) {
   return normalized;
 }
 
+const WINDOWS_DRIVE_LETTERS = ['C:', 'D:', 'E:', 'F:', 'G:', 'H:', 'I:', 'J:', 'K:', 'L:', 'M:', 'N:', 'O:', 'P:', 'Q:', 'R:', 'S:', 'T:', 'U:', 'V:', 'W:', 'X:', 'Y:', 'Z:'];
+
 function validatePath(targetPath) {
   if (!targetPath) {
     throw new Error('Path is required');
@@ -50,7 +82,16 @@ function validatePath(targetPath) {
 
   rejectPathTraversal(targetPath);
 
-  if (!targetPath.startsWith(VIRTUAL_PATH_PREFIX) && 
+  const isWindowsPath = /^[A-Za-z]:[/\\]/.test(targetPath);
+  if (isWindowsPath) {
+    const driveLetter = targetPath.charAt(0).toUpperCase() + ':';
+    if (!WINDOWS_DRIVE_LETTERS.includes(driveLetter)) {
+      throw new Error(`Drive ${driveLetter} is not allowed`);
+    }
+    return targetPath;
+  }
+
+  if (!targetPath.startsWith(VIRTUAL_PATH_PREFIX) &&
       !targetPath.startsWith('/mnt/skills') &&
       !targetPath.startsWith('/mnt/acp-workspace')) {
     throw new Error(`Only paths under ${VIRTUAL_PATH_PREFIX}, /mnt/skills, or /mnt/acp-workspace are allowed`);
@@ -179,6 +220,7 @@ module.exports = {
   getAllowedRoots,
   isPathAllowed,
   checkCommandSafety,
+  convertWindowsPath,
   VIRTUAL_PATH_PREFIX,
   ALLOWED_SYSTEM_PATHS,
   ALLOWED_EXTENSIONS

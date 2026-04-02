@@ -114,6 +114,7 @@ router.post('/upload', upload.single('file'), (req, res) => {
     res.json({
       success: true,
       filename: filename,
+      path: req.file.path,
       size: req.file.size
     });
   } catch (error) {
