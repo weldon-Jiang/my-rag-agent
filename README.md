@@ -323,21 +323,207 @@ npm run dev
 
 ### 添加新技能
 
-1. 在 `server/skills/` 下创建技能文件
-2. 在 `skills-manifest.js` 中注册技能
-3. 实现技能处理逻辑
+#### 步骤 1：创建技能处理文件
+
+在 `server/skills/` 目录下创建技能类文件，例如 `server/skills/my-skill/my-skill.js`：
+
+```javascript
+const BaseSkill = require('../base-skill');
+
+class MySkill extends BaseSkill {
+  /**
+   * 处理技能请求
+   * @param {Object} params - 技能参数
+   * @param {Object} context - 执行上下文
+   * @returns {Object} 处理结果
+   */
+  async process(params, context) {
+    // 实现技能逻辑
+    return { success: true, result: '处理结果' };
+  }
+}
+
+module.exports = MySkill;
+```
+
+#### 步骤 2：在技能清单中注册
+
+在 `server/skills/skills-manifest.js` 中添加技能配置：
+
+```javascript
+{
+  name: 'my-skill',              // 【必填】技能唯一标识名称
+  description: '我的技能描述',     // 【必填】技能的详细功能描述
+  trigger: ['关键词1', '关键词2'], // 【必填】触发技能的关键词数组
+  usage: '如何使用这个技能',       // 【必填】技能的使用说明
+  tools: ['tool1', 'tool2'],     // 【必填】该技能使用的工具名称数组
+  supportedTypes: ['.pdf', '.doc'], // 【可选】支持的文件扩展名数组，空数组表示不处理文件
+  requiredParams: ['param1'],     // 【必填】必需的参数名称数组
+  file: path.join(__dirname, 'my-skill/my-skill.js')  // 【必填】技能文件路径
+}
+```
+
+#### 技能属性说明
+
+| 属性 | 必填 | 类型 | 说明 |
+|-----|------|------|------|
+| name | ✅ | string | 技能唯一标识，不能与其他技能重名 |
+| description | ✅ | string | 技能的详细功能描述，会显示在技能工具管理页面 |
+| trigger | ✅ | array | 触发关键词数组，当用户输入包含这些词时会激活该技能 |
+| usage | ✅ | string | 技能的使用说明，告知用户如何正确使用 |
+| tools | ✅ | array | 该技能使用的工具名称数组，工具必须在 tools-manifest 中定义 |
+| supportedTypes | ❌ | array | 支持的文件扩展名，如 `['.pdf', '.jpg']`，空数组表示不处理文件 |
+| requiredParams | ✅ | array | 必需的参数名称数组 |
+| file | ✅ | string | 技能类的文件路径，使用 `path.join(__dirname, ...)` |
+
+#### 步骤 3：重启服务器
+
+新增技能后重启服务器，访问「技能工具管理」页面即可看到新增的技能。
+
+---
 
 ### 添加新工具
 
-1. 在 `server/tools/` 下创建工具文件
-2. 在 `tools-manifest.js` 中注册工具
-3. 工具通过 `toolsManager.execute()` 自动适配
+#### 工具类型说明
+
+系统中的工具有三种类型：
+
+1. **沙箱工具**：在沙盒环境中执行代码（bash, python）
+2. **技能工具**：需要配合技能使用的工具（recognize_image, extract_pdf_text）
+3. **API 工具**：调用外部 API 获取数据的工具（cat_image, weather）
+
+#### 步骤 1：创建工具文件
+
+**对于 API 工具**（推荐），在 `server/tools/` 下创建工具文件，例如 `server/tools/my-api/my-api.js`：
+
+```javascript
+/**
+ * 我的 API 工具
+ * @param {Object} args - 工具参数
+ * @param {Object} context - 执行上下文
+ * @returns {Object} 执行结果
+ */
+module.exports = async function(args, context) {
+  try {
+    // 调用外部 API
+    const response = await fetch('https://api.example.com/data');
+    const data = await response.json();
+
+    return {
+      success: true,
+      result: data
+    };
+  } catch (error) {
+    return {
+      success: false,
+      error: error.message
+    };
+  }
+};
+```
+
+**对于沙箱工具**，参考 `server/tools/bash/bash.js` 或 `server/tools/python/python.js`。
+
+#### 步骤 2：在工具清单中注册
+
+在 `server/tools/tools-manifest.js` 中添加工具配置：
+
+```javascript
+{
+  name: 'my_tool',                // 【必填】工具唯一标识名称
+  category: '我的分类',            // 【必填】工具分类，会显示在技能工具管理页面
+  description: '我的工具描述',      // 【必填】工具的详细功能描述
+  trigger: ['关键词1', '关键词2'], // 【必填】触发工具的关键词数组
+  usage: '如何使用这个工具',        // 【必填】工具的使用说明
+  parameters: {                    // 【可选】工具参数定义
+    param1: {
+      type: 'string',             // 参数类型：string, integer, boolean, object, array
+      description: '参数描述'     // 参数的说明
+    }
+  },
+  requiredParams: ['param1'],      // 【可选】必需的参数名称数组
+  file: path.join(__dirname, 'my-api/my-api.js'),  // 【必填】工具文件路径
+  functionName: 'execute'           // 【可选】导出函数名，默认 'execute'
+}
+```
+
+#### 工具属性说明
+
+| 属性 | 必填 | 类型 | 说明 |
+|-----|------|------|------|
+| name | ✅ | string | 工具唯一标识，不能与其他工具重名 |
+| category | ✅ | string | 工具分类，用于在技能工具管理页面分组展示 |
+| description | ✅ | string | 工具的详细功能描述 |
+| trigger | ✅ | array | 触发关键词数组，当用户输入包含这些词时会匹配该工具 |
+| usage | ✅ | string | 工具的使用说明，告知用户如何正确使用 |
+| parameters | ❌ | object | 工具参数定义，键为参数名，值为参数类型和描述 |
+| requiredParams | ❌ | array | 必需的参数名称数组 |
+| file | ✅ | string | 工具文件的路径 |
+| functionName | ❌ | string | 导出函数名，默认导出 `execute` 函数 |
+
+#### 步骤 3：重启服务器
+
+新增工具后重启服务器，访问「技能工具管理」页面即可看到新增的工具。
+
+---
 
 ### 添加新页面
 
-1. 在 `public/pages/` 下创建页面文件夹
-2. 实现页面模块，导出 `init()` 函数
-3. 在 `router.js` 中注册路由
+#### 页面开发规范
+
+1. **创建页面目录**：在 `public/pages/` 下创建页面文件夹，如 `public/pages/my-page/`
+
+2. **创建页面模块文件** `public/pages/my-page/my-page.js`：
+
+```javascript
+/**
+ * 我的页面模块
+ * @description 页面功能描述
+ * @module pages/my-page
+ */
+
+/**
+ * 页面初始化函数
+ * @description 页面加载时调用的初始化函数
+ */
+function init() {
+  console.log('[MyPage] 页面初始化');
+  // 绑定事件监听
+  // 加载数据
+  // 渲染UI
+}
+
+/**
+ * 页面退出函数（可选）
+ * @description 页面切换时调用的清理函数
+ */
+function destroy() {
+  // 清理事件监听
+  // 取消定时器等
+}
+
+// 导出页面模块
+window.myPageModule = {
+  init,
+  destroy  // 可选
+};
+```
+
+3. **在 index.html 中添加页面容器**：
+
+```html
+<div id="myPage" class="page">
+  <!-- 页面内容 -->
+</div>
+```
+
+4. **在菜单中添加导航**（可选）：
+
+在 `index.html` 的菜单中添加菜单项：
+
+```html
+<div class="menu-item" data-page="my-page">我的页面</div>
+```
 
 ## License
 

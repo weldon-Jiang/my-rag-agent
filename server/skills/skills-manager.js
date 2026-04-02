@@ -46,7 +46,8 @@ class SkillsManager {
       name: entry.config.name,
       description: entry.config.description,
       trigger: entry.config.trigger,
-      supportedTypes: entry.config.supportedTypes
+      supportedTypes: entry.config.supportedTypes,
+      tools: entry.config.tools || []
     }));
   }
 
