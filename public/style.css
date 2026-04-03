@@ -390,6 +390,13 @@ header h1 {
     display: flex;
 }
 
+#pageContainer {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
 .chat-top-controls {
     display: flex;
     justify-content: flex-end;
@@ -828,9 +835,14 @@ button:hover {
 }
 
 .skill-tools-container {
-    max-width: 900px;
-    margin: 0 auto;
+    max-width: 100%;
+    width: 100%;
     padding: 0 20px 20px 20px;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    overflow: hidden;
 }
 
 .skill-tools-content {
@@ -842,12 +854,18 @@ button:hover {
 }
 
 .tab-content.active {
-    display: block;
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    overflow: hidden;
+    min-height: 0;
 }
 
 .skill-list, .tool-list {
-    max-height: 500px;
+    flex: 1;
     overflow-y: auto;
+    overflow-x: hidden;
+    min-height: 0;
     padding-right: 10px;
 }
 
@@ -997,8 +1015,8 @@ button:hover {
 
 .doc-items {
     display: grid;
-    grid-template-columns: repeat(2, 1fr);
-    gap: 8px;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 12px;
 }
 
 .files-card {
@@ -1011,6 +1029,48 @@ button:hover {
 .files-card .file-list {
     flex: 1;
     overflow-y: auto;
+}
+
+.files-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 15px;
+    flex-wrap: wrap;
+    gap: 10px;
+}
+
+.files-actions {
+    display: flex;
+    gap: 15px;
+    align-items: center;
+}
+
+.batch-delete-btn {
+    padding: 5px 15px;
+    background: #dc3545;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+
+.batch-delete-btn:hover:not(:disabled) {
+    background: #c82333;
+}
+
+.batch-delete-btn:disabled {
+    background: #ccc;
+    cursor: not-allowed;
+}
+
+.file-item:hover {
+    background: var(--bg-hover);
+}
+
+.file-item.selected {
+    background-color: var(--bg-selected, #e3f2fd);
 }
 
 .toast-message {
@@ -1053,6 +1113,20 @@ button:hover {
     background: #f5f5f5;
     border-radius: 6px;
     margin-bottom: 8px;
+    transition: background 0.2s;
+}
+
+.file-item:hover {
+    background: var(--bg-hover);
+}
+
+.file-item.selected {
+    background-color: var(--bg-selected, #e3f2fd);
+}
+
+.file-item input[type="checkbox"] {
+    margin-right: 10px;
+    cursor: pointer;
 }
 
 .file-item span {

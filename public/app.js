@@ -16,18 +16,36 @@ let selectedFiles = [];
 /**
  * DOM加载完成后初始化应用
  */
-document.addEventListener('DOMContentLoaded', () => {
-    loadSessions();
-    loadFiles();
-    loadModels();
-    setupEventListeners();
-    setupNavigation();
-    setupDropzone();
-    setupChatInput();
-    setupModelModal();
-    initTheme();
-    setupSessionEvents();
+document.addEventListener('DOMContentLoaded', async () => {
+    await initializeApp();
 });
+
+/**
+ * 初始化应用
+ * @description 加载页面 HTML、组件，然后初始化各模块
+ */
+async function initializeApp() {
+    try {
+        await router.loadAllPagesHTML();
+        await router.loadAllComponents();
+
+        loadSessions();
+        loadFiles();
+        loadModels();
+        setupEventListeners();
+        setupNavigation();
+        setupDropzone();
+        setupChatInput();
+        setupModelModal();
+        initTheme();
+        setupSessionEvents();
+        setupBatchDeleteEvents();
+
+        router.navigateTo('chat');
+    } catch (error) {
+        console.error('[App] 初始化失败:', error);
+    }
+}
 
 /**
  * 设置会话相关事件监听器
@@ -546,9 +564,13 @@ function renderFileList(files) {
 
     files.forEach(file => {
         const fileItem = document.createElement('div');
-        fileItem.className = 'file-item';
+        fileItem.className = 'file-item' + (batchDeleteSelectedFiles.has(file.name) ? ' selected' : '');
         const sizeKB = (file.size / 1024).toFixed(2);
         fileItem.innerHTML = `
+            <input type="checkbox" class="file-checkbox"
+                   value="${file.name}"
+                   ${batchDeleteSelectedFiles.has(file.name) ? 'checked' : ''}
+                   onchange="toggleFileSelection('${file.name}', this.checked)">
             <span title="${file.name}">${file.name} (${sizeKB} KB)</span>
             <button onclick="deleteFile('${file.name}')">删除</button>
         `;
@@ -557,12 +579,78 @@ function renderFileList(files) {
 }
 
 /**
+ * 选中文件集合(批量删除用)
+ */
+let batchDeleteSelectedFiles = new Set();
+
+/**
+ * 切换文件选中状态
+ * @param {string} filename - 文件名
+ * @param {boolean} checked - 是否选中
+ */
+function toggleFileSelection(filename, checked) {
+    if (checked) {
+        batchDeleteSelectedFiles.add(filename);
+    } else {
+        batchDeleteSelectedFiles.delete(filename);
+    }
+    updateBatchDeleteButton();
+}
+
+/**
+ * 更新批量删除按钮状态
+ */
+function updateBatchDeleteButton() {
+    const btn = document.getElementById('batchDeleteBtn');
+    if (btn) {
+        btn.disabled = batchDeleteSelectedFiles.size === 0;
+    }
+}
+
+/**
+ * 批量删除选中的文件
+ */
+async function batchDeleteFiles() {
+    if (batchDeleteSelectedFiles.size === 0) return;
+    if (!confirm(`确定要删除选中的 ${batchDeleteSelectedFiles.size} 个文件吗？`)) return;
+
+    const filesToDelete = Array.from(batchDeleteSelectedFiles);
+    for (const filename of filesToDelete) {
+        await deleteFile(filename, true);
+    }
+    batchDeleteSelectedFiles.clear();
+    updateBatchDeleteButton();
+    loadFiles();
+}
+
+/**
+ * 设置批量删除事件监听
+ */
+function setupBatchDeleteEvents() {
+    document.getElementById('selectAllFiles')?.addEventListener('change', (e) => {
+        const checkboxes = document.querySelectorAll('.file-checkbox');
+        checkboxes.forEach(cb => {
+            cb.checked = e.target.checked;
+            if (e.target.checked) {
+                batchDeleteSelectedFiles.add(cb.value);
+            } else {
+                batchDeleteSelectedFiles.delete(cb.value);
+            }
+        });
+        updateBatchDeleteButton();
+    });
+
+    document.getElementById('batchDeleteBtn')?.addEventListener('click', batchDeleteFiles);
+}
+
+/**
  * 删除指定文件
  * @param {string} filename - 要删除的文件名
+ * @param {boolean} silent - 是否静默删除（不弹确认框，不自动刷新）
  * @description 调用删除API删除文件,成功后刷新文件列表
  */
-async function deleteFile(filename) {
-    if (!confirm(`确定要删除文件 ${filename} 吗？`)) {
+async function deleteFile(filename, silent = false) {
+    if (!silent && !confirm(`确定要删除文件 ${filename} 吗？`)) {
         return;
     }
 
@@ -572,7 +660,9 @@ async function deleteFile(filename) {
         });
         const result = await response.json();
         if (result.success) {
-            loadFiles();
+            if (!silent) {
+                loadFiles();
+            }
         }
     } catch (error) {
         console.error('删除文件失败:', error);
