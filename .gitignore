@@ -5,3 +5,4 @@ data/
 electron/
 documents/
 *.log
+docs/log.text

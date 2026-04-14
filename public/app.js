@@ -1883,13 +1883,19 @@ function handleClarification(data) {
                     ${pendingClarification.options.map((option, index) => {
                         const optionValue = typeof option === 'string' ? option : (option.value || option);
                         const optionLabel = typeof option === 'string' ? option : (option.label || option.value || option);
+                        const isOther = optionValue === '其他';
                         return `
-                            <button class="clarification-option" data-option="${escapeHtml(optionValue)}" data-index="${index}">
-                                <span class="option-icon">${String.fromCharCode(65 + index)}</span>
+                            <label class="clarification-radio${isOther ? ' option-other' : ''}">
+                                <input type="radio" name="clarification-option" value="${escapeHtml(optionValue)}" data-option="${escapeHtml(optionValue)}" />
+                                <span class="radio-custom"></span>
                                 <span class="option-text">${escapeHtml(optionLabel)}</span>
-                            </button>
+                                ${isOther ? '<input type="text" class="other-input" placeholder="请输入内容" style="margin-left: 8px; padding: 4px 8px; border: 1px solid #ddd; border-radius: 4px;" />' : ''}
+                            </label>
                         `;
                     }).join('')}
+                </div>
+                <div class="clarification-actions" style="margin-top: 12px; text-align: right;">
+                    <button class="clarification-confirm-btn" style="padding: 8px 20px; background: #1890ff; color: white; border: none; border-radius: 4px; cursor: pointer;">确认</button>
                 </div>
             </div>
         `;
@@ -1906,12 +1912,47 @@ function handleClarification(data) {
     chatMessages.appendChild(messageDiv);
     chatMessages.scrollTop = chatMessages.scrollHeight;
 
-    document.querySelectorAll('.clarification-option').forEach(btn => {
-        btn.addEventListener('click', () => {
-            const option = btn.dataset.option;
-            submitClarification(option);
+    const radioOptions = document.querySelectorAll('input[name="clarification-option"]');
+    const otherLabel = document.querySelector('.option-other');
+    const otherInput = otherLabel ? otherLabel.querySelector('.other-input') : null;
+    const confirmBtn = document.querySelector('.clarification-confirm-btn');
+
+    radioOptions.forEach(radio => {
+        radio.addEventListener('change', () => {
+            radioOptions.forEach(r => r.closest('.clarification-radio').classList.remove('selected'));
+            radio.closest('.clarification-radio').classList.add('selected');
+
+            if (radio.dataset.option === '其他' && otherInput) {
+                otherInput.disabled = false;
+                otherInput.focus();
+                otherInput.style.border = '1px solid #ddd';
+            } else if (otherInput) {
+                otherInput.disabled = true;
+                otherInput.value = '';
+                otherInput.style.border = '1px solid #ddd';
+            }
         });
     });
+
+    if (confirmBtn) {
+        confirmBtn.addEventListener('click', () => {
+            const selectedRadio = document.querySelector('input[name="clarification-option"]:checked');
+            if (!selectedRadio) {
+                return;
+            }
+
+            const option = selectedRadio.dataset.option;
+            if (option === '其他' && otherInput) {
+                if (!otherInput.value.trim()) {
+                    otherInput.style.border = '1px solid red';
+                    return;
+                }
+                submitClarification(otherInput.value.trim());
+            } else {
+                submitClarification(option);
+            }
+        });
+    }
 }
 
 /**
@@ -1973,7 +2014,7 @@ async function submitClarification(response) {
                 originalQuery: '',
                 responses: []
             };
-            showClarification(result);
+            handleClarification(result);
         } else if (result.content) {
             addMessage(result.content, 'assistant', result.source, result.toolResults || []);
             pendingClarification = null;

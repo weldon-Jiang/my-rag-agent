@@ -1,25 +1,27 @@
 const axios = require('axios');
 
-function buildAPIURL(baseURL, protocol) {
+const SUPPORTED_PROTOCOLS = ['openai', 'anthropic', 'minimax'];
+
+function buildAPIURL(baseURL, protocol = 'openai') {
   const url = baseURL.replace(/\/$/, '');
+
   if (protocol === 'anthropic') {
     return url.endsWith('/v1/messages') ? url : `${url}/v1/messages`;
   }
+
   if (url.includes('/v1/chat/completions')) {
     return url;
   }
   if (url.endsWith('/v1')) {
     return `${url}/chat/completions`;
   }
-    if (url.endsWith('/v1/')) {
+  if (url.endsWith('/v1/')) {
     return `${url}chat/completions`;
   }
   return `${url}/v1/chat/completions`;
 }
 
-function buildRequestBody(model, systemPrompt, userMessage) {
-  const protocol = arguments[3] || 'openai';
-
+function buildRequestBody(model, systemPrompt, userMessage, protocol = 'openai') {
   if (protocol === 'anthropic') {
     return {
       model: model,
@@ -79,14 +81,14 @@ function extractResponseContent(response) {
 }
 
 async function callAI(model, systemPrompt, userMessage, modelConfig) {
-  const protocol = modelConfig.protocol || 'openai';
+  const protocol = SUPPORTED_PROTOCOLS.includes(modelConfig.protocol) ? modelConfig.protocol : 'openai';
   const baseURL = modelConfig.url;
   const apiKey = modelConfig.apiKey;
 
   const fullURL = buildAPIURL(baseURL, protocol);
   const requestBody = buildRequestBody(model, systemPrompt, userMessage, protocol);
 
-  console.log('[AI Service] 调用 URL:', fullURL);
+  console.log('[AI Service] 调用协议:', protocol, 'URL:', fullURL);
 
   try {
     const response = await axios.post(fullURL, requestBody, {
@@ -113,5 +115,6 @@ module.exports = {
   buildAPIURL,
   buildRequestBody,
   extractResponseContent,
-  callAI
+  callAI,
+  SUPPORTED_PROTOCOLS
 };
