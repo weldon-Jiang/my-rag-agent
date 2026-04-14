@@ -9,9 +9,18 @@
         <div class="chat-main">
             <div class="chat-top-controls">
                 <div class="mode-buttons">
-                    <button class="mode-btn" data-mode="knowledge">仅知识库</button>
-                    <button class="mode-btn" data-mode="ai">仅AI</button>
-                    <button class="mode-btn active" data-mode="hybrid">混合</button>
+                    <label class="mode-radio">
+                        <input type="radio" name="mode" value="knowledge">
+                        <span>仅知识库</span>
+                    </label>
+                    <label class="mode-radio">
+                        <input type="radio" name="mode" value="ai">
+                        <span>仅AI</span>
+                    </label>
+                    <label class="mode-radio active">
+                        <input type="radio" name="mode" value="hybrid" checked>
+                        <span>混合</span>
+                    </label>
                 </div>
                 <div id="modelSelectWrapper"></div>
             </div>

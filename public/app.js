@@ -242,11 +242,11 @@ function setupEventListeners() {
         }
     });
 
-    document.querySelectorAll('.mode-btn').forEach(btn => {
-        btn.addEventListener('click', () => {
-            selectedMode = btn.dataset.mode;
+    document.querySelectorAll('.mode-radio input[type="radio"]').forEach(radio => {
+        radio.addEventListener('change', () => {
+            selectedMode = radio.value;
             window.currentMode = selectedMode;
-            updateModeButtons();
+            updateModeRadio();
         });
     });
 }
@@ -254,14 +254,16 @@ function setupEventListeners() {
 window.currentMode = selectedMode;
 
 /**
- * 更新模式按钮的激活状态
- * @description 根据当前选中的模式高亮对应的按钮
+ * 更新模式单选按钮的激活状态
+ * @description 根据当前选中的模式高亮对应的标签
  */
-function updateModeButtons() {
-    document.querySelectorAll('.mode-btn').forEach(btn => {
-        btn.classList.remove('active');
-        if (btn.dataset.mode === selectedMode) {
-            btn.classList.add('active');
+function updateModeRadio() {
+    document.querySelectorAll('.mode-radio').forEach(label => {
+        const radio = label.querySelector('input[type="radio"]');
+        label.classList.remove('active');
+        if (radio && radio.value === selectedMode) {
+            label.classList.add('active');
+            radio.checked = true;
         }
     });
 }
@@ -271,7 +273,7 @@ function updateModeButtons() {
  * @description 为菜单项绑定点击事件,点击时导航到对应页面
  */
 function setupNavigation() {
-    const menuItems = document.querySelectorAll('.menu-item');
+    const menuItems = document.querySelectorAll('.menu-item, .nav-item');
     menuItems.forEach(item => {
         item.addEventListener('click', () => {
             const page = item.dataset.page;
@@ -298,6 +300,12 @@ function navigateTo(page) {
         'models': 'modelsPage',
         'chat': 'chatPage'
     };
+    const pageTitleMap = {
+        'skill-tools': '技能工具',
+        'knowledge': '知识库',
+        'models': '模型管理',
+        'chat': 'AI对话'
+    };
     const actualPageId = pageIdMap[page] || `${page}Page`;
     console.log('[DEBUG] Looking for element with ID:', actualPageId);
 
@@ -305,6 +313,11 @@ function navigateTo(page) {
     console.log('[DEBUG] pageElement:', pageElement);
     if (pageElement) {
         pageElement.classList.add('active');
+    }
+
+    const pageTitle = document.getElementById('pageTitle');
+    if (pageTitle && pageTitleMap[page]) {
+        pageTitle.textContent = pageTitleMap[page];
     }
 
     if (page === 'chat') {
@@ -839,6 +852,18 @@ function selectModel(modelId) {
     }
     const menu = document.getElementById('modelDropdownMenu');
     const toggle = document.querySelector('.models-dropdown-toggle');
+    if (menu) {
+        menu.querySelectorAll('.model-option').forEach(option => {
+            const radio = option.querySelector('input[type="radio"]');
+            if (radio && radio.value === modelId) {
+                option.classList.add('selected');
+                radio.checked = true;
+            } else {
+                option.classList.remove('selected');
+                if (radio) radio.checked = false;
+            }
+        });
+    }
     menu?.classList.remove('open');
     toggle?.classList.remove('active');
 }

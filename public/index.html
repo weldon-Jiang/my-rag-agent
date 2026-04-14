@@ -9,39 +9,51 @@
     <link rel="stylesheet" href="styles/content-renderer.css">
 </head>
 <body>
-    <div class="container">
-        <header>
-            <h1>🤖 本地知识库智能体</h1>
-            <nav class="top-nav">
-                <div class="menu-item active" data-page="chat">
-                    <span class="menu-icon">💬</span>
-                    <span>AI对话</span>
+    <div class="app-layout">
+        <aside class="sidebar">
+            <div class="sidebar-header">
+                <h1>🤖 智能体</h1>
+            </div>
+            <nav class="sidebar-nav">
+                <div class="nav-item active" data-page="chat">
+                    <span class="nav-icon">💬</span>
+                    <span class="nav-text">AI对话</span>
                 </div>
-                <div class="menu-item" data-page="knowledge">
-                    <span class="menu-icon">📚</span>
-                    <span>知识库管理</span>
+                <div class="nav-item" data-page="knowledge">
+                    <span class="nav-icon">📚</span>
+                    <span class="nav-text">知识库</span>
                 </div>
-                <div class="menu-item" data-page="skill-tools">
-                    <span class="menu-icon">🛠️</span>
-                    <span>技能工具管理</span>
+                <div class="nav-item" data-page="skill-tools">
+                    <span class="nav-icon">🛠️</span>
+                    <span class="nav-text">技能工具</span>
                 </div>
-                <div class="menu-item" data-page="models">
-                    <span class="menu-icon">⚙️</span>
-                    <span>模型管理</span>
+                <div class="nav-item" data-page="models">
+                    <span class="nav-icon">⚙️</span>
+                    <span class="nav-text">模型管理</span>
                 </div>
             </nav>
-            <div class="theme-switcher">
-                <button class="theme-btn active" data-theme="system">跟随系统</button>
-                <button class="theme-btn" data-theme="light">浅色</button>
-                <button class="theme-btn" data-theme="dark">深色</button>
+            <div class="sidebar-footer">
+                <div class="theme-switcher">
+                    <button class="theme-btn active" data-theme="system">系统</button>
+                    <button class="theme-btn" data-theme="light">浅色</button>
+                    <button class="theme-btn" data-theme="dark">深色</button>
+                </div>
             </div>
-        </header>
+        </aside>
 
-        <div class="main-content">
-            <div class="content-area">
+        <main class="main-area">
+            <header class="top-bar">
+                <div class="top-bar-left">
+                    <h2 class="page-title" id="pageTitle">AI对话</h2>
+                </div>
+                <div class="top-bar-right">
+                    <div id="modelSelectWrapper"></div>
+                </div>
+            </header>
+            <div class="content-wrapper">
                 <div id="pageContainer"></div>
             </div>
-        </div>
+        </main>
     </div>
 
     <div id="modalContainer"></div>
