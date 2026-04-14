@@ -4,30 +4,23 @@
  * @module pages/chat
  */
 
-let currentSessionId = null;
-let currentModelId = null;
 let isProcessing = false;
 
-// 页面初始化函数
 function init() {
   console.log('[Chat] 聊天页面初始化');
-  loadSessions();
   setupEventListeners();
 }
 
-/**
- * 设置事件监听器
- */
 function setupEventListeners() {
   const sendBtn = document.getElementById('sendBtn');
-  const userInput = document.getElementById('userInput');
+  const chatInput = document.getElementById('chatInput');
 
   if (sendBtn) {
     sendBtn.addEventListener('click', handleSendMessage);
   }
 
-  if (userInput) {
-    userInput.addEventListener('keydown', (e) => {
+  if (chatInput) {
+    chatInput.addEventListener('keydown', (e) => {
       if (e.key === 'Enter' && !e.shiftKey) {
         e.preventDefault();
         handleSendMessage();
@@ -36,125 +29,40 @@ function setupEventListeners() {
   }
 }
 
-/**
- * 加载会话列表
- */
-async function loadSessions() {
-  try {
-    const response = await fetch('/api/chat/sessions');
-    const sessions = await response.json();
-
-    const sessionList = document.getElementById('sessionList');
-    if (sessionList) {
-      renderSessions(sessions);
-    }
-
-    // 选择第一个会话或创建新会话
-    if (sessions.length > 0) {
-      selectSession(sessions[0].id);
-    } else {
-      createNewSession();
-    }
-  } catch (error) {
-    console.error('[Chat] 加载会话失败:', error);
-  }
-}
-
-/**
- * 渲染会话列表
- * @param {Array} sessions - 会话列表
- */
-function renderSessions(sessions) {
-  const sessionList = document.getElementById('sessionList');
-  if (!sessionList) return;
-
-  sessionList.innerHTML = sessions.map(session => `
-    <div class="session-item ${session.id === currentSessionId ? 'active' : ''}"
-         onclick="window.chatPage.selectSession('${session.id}')">
-      <span class="session-title">${session.title || '新对话'}</span>
-      <span class="session-time">${formatTime(session.updatedAt)}</span>
-    </div>
-  `).join('');
-}
-
-/**
- * 选择会话
- * @param {string} sessionId - 会话ID
- */
-async function selectSession(sessionId) {
-  currentSessionId = sessionId;
-  await loadSessionMessages(sessionId);
-  renderSessions([]);
-  await loadSessions();
-}
-
-/**
- * 加载会话消息
- * @param {string} sessionId - 会话ID
- */
-async function loadSessionMessages(sessionId) {
-  try {
-    const response = await fetch(`/api/chat/history/${sessionId}`);
-    const messages = await response.json();
-    renderMessages(messages);
-  } catch (error) {
-    console.error('[Chat] 加载消息失败:', error);
-  }
-}
-
-/**
- * 渲染消息列表
- * @param {Array} messages - 消息列表
- */
-function renderMessages(messages) {
-  const messagesContainer = document.getElementById('messagesContainer');
-  if (!messagesContainer) return;
-
-  messagesContainer.innerHTML = messages.map(msg => `
-    <div class="message ${msg.role}">
-      <div class="message-content">${escapeHtml(msg.content)}</div>
-    </div>
-  `).join('');
-
-  messagesContainer.scrollTop = messagesContainer.scrollHeight;
-}
-
-/**
- * 处理发送消息
- */
 async function handleSendMessage() {
   if (isProcessing) return;
 
-  const userInput = document.getElementById('userInput');
-  const message = userInput?.value.trim();
+  const chatInput = document.getElementById('chatInput');
+  const message = chatInput?.value.trim();
 
   if (!message) return;
 
   isProcessing = true;
-  userInput.value = '';
+  chatInput.value = '';
 
   try {
-    // 显示用户消息
     appendMessage('user', message);
 
-    // 发送请求
+    console.log('[Chat] 发送请求 - message:', message, 'mode:', window.currentMode);
+
     const response = await fetch('/api/chat', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        message,
-        sessionId: currentSessionId,
-        mode: 'hybrid'
+        message: message,
+        sessionId: window.currentSessionId,
+        mode: window.currentMode || 'hybrid'
       })
     });
 
     const result = await response.json();
+    console.log('[Chat] 收到响应:', JSON.stringify(result));
 
-    // 显示AI响应
-    if (result.response) {
-      appendMessage('assistant', result.response);
+    if (result.type === 'clarification') {
+      appendClarification(result);
+    } else if (result.content) {
+      appendMessage('assistant', result.content, result.resultSources);
     }
-
   } catch (error) {
     console.error('[Chat] 发送消息失败:', error);
     appendMessage('assistant', '抱歉，发生了错误。请稍后重试。');
@@ -163,71 +71,120 @@ async function handleSendMessage() {
   }
 }
 
-/**
- * 追加消息到界面
- * @param {string} role - 角色 (user/assistant)
- * @param {string} content - 内容
- */
-function appendMessage(role, content) {
-  const messagesContainer = document.getElementById('messagesContainer');
-  if (!messagesContainer) return;
+function appendMessage(role, content, resultSources = null) {
+  const chatMessages = document.getElementById('chatMessages');
+  if (!chatMessages) return;
 
-  const messageHtml = `
-    <div class="message ${role}">
-      <div class="message-content">${escapeHtml(content)}</div>
+  const messageDiv = document.createElement('div');
+  messageDiv.className = `message ${role}`;
+
+  console.log('[Chat] appendMessage - resultSources:', resultSources);
+
+  let sourceLabel = '';
+  if (role === 'assistant' && resultSources && resultSources.length > 0) {
+    const sourceIcons = {
+      '知识库': '📚',
+      '工具': '🔧',
+      'AI': '🤖'
+    };
+
+    const sourceItems = resultSources.map(source => {
+      const icon = sourceIcons[source] || '•';
+      return `<span class="source-item">${icon} ${source}</span>`;
+    }).join(' ');
+
+    sourceLabel = `<div class="source-label">${sourceItems}</div>`;
+  } else if (role === 'assistant') {
+    sourceLabel = `<div class="source-label"><span class="source-item">• 无来源</span></div>`;
+  }
+
+  messageDiv.innerHTML = `<div class="message-content">${sourceLabel}${escapeHtml(content)}</div>`;
+  chatMessages.appendChild(messageDiv);
+  chatMessages.scrollTop = chatMessages.scrollHeight;
+}
+
+function appendClarification(data) {
+  const chatMessages = document.getElementById('chatMessages');
+  if (!chatMessages) return;
+
+  const messageDiv = document.createElement('div');
+  messageDiv.className = 'message assistant';
+
+  const originalQuery = data.originalQuery || data.original_query || '';
+  const clarificationId = data.clarification_id || data.clarificationId || '';
+
+  let optionsHtml = '';
+  if (data.options && data.options.length > 0) {
+    optionsHtml = '<div class="clarification-options">';
+    data.options.forEach((option, index) => {
+      optionsHtml += `<button class="clarification-option" data-value="${escapeHtml(option)}" data-original-query="${escapeHtml(originalQuery)}" data-clarification-id="${escapeHtml(clarificationId)}">${escapeHtml(option)}</button>`;
+    });
+    optionsHtml += '</div>';
+  }
+
+  messageDiv.innerHTML = `
+    <div class="message-content">
+      <div class="clarification-question">${escapeHtml(data.question)}</div>
+      ${optionsHtml}
     </div>
   `;
 
-  messagesContainer.insertAdjacentHTML('beforeend', messageHtml);
-  messagesContainer.scrollTop = messagesContainer.scrollHeight;
+  chatMessages.appendChild(messageDiv);
+  chatMessages.scrollTop = chatMessages.scrollHeight;
+
+  let clarificationData = null;
+  document.querySelectorAll('.clarification-option').forEach(btn => {
+    btn.addEventListener('click', () => {
+      if (!clarificationData) {
+        clarificationData = {
+          clarification_id: btn.dataset.clarificationId,
+          originalQuery: btn.dataset.originalQuery,
+          question: data.question,
+          options: data.options
+        };
+      }
+      const value = btn.dataset.value;
+      console.log('[Chat] 点击追问选项:', value);
+      console.log('[Chat] 追问数据:', JSON.stringify(clarificationData));
+      handleClarificationResponse(clarificationData, value);
+    });
+  });
 }
 
-/**
- * 创建新会话
- */
-async function createNewSession() {
+async function handleClarificationResponse(data, value) {
   try {
-    const response = await fetch('/api/chat/sessions', {
+    appendMessage('user', value);
+
+    const response = await fetch('/api/chat/clarification/respond', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({})
+      body: JSON.stringify({
+        clarification_id: data.clarification_id || data.clarificationId,
+        response: value,
+        original_query: data.originalQuery || '',
+        sessionId: window.currentSessionId,
+        mode: window.currentMode || 'hybrid'
+      })
     });
 
-    const session = await response.json();
-    currentSessionId = session.id;
-    await loadSessions();
-    clearMessages();
+    const result = await response.json();
+    console.log('[Chat] 追问响应结果:', JSON.stringify(result));
+
+    if (result.type === 'text' && result.content) {
+      appendMessage('assistant', result.content, result.resultSources);
+    } else if (result.type === 'clarification') {
+      appendClarification(result);
+    } else if (!response.ok) {
+      console.error('[Chat] 追问响应错误:', result.error);
+      appendMessage('assistant', `错误: ${result.error || '处理失败'}`);
+    } else {
+      console.error('[Chat] 追问响应格式异常:', result);
+    }
   } catch (error) {
-    console.error('[Chat] 创建会话失败:', error);
+    console.error('[Chat] 处理追问回应失败:', error);
   }
 }
 
-/**
- * 清空消息显示
- */
-function clearMessages() {
-  const messagesContainer = document.getElementById('messagesContainer');
-  if (messagesContainer) {
-    messagesContainer.innerHTML = '';
-  }
-}
-
-/**
- * 格式化时间
- * @param {string} timestamp - 时间戳
- * @returns {string} 格式化后的时间
- */
-function formatTime(timestamp) {
-  if (!timestamp) return '';
-  const date = new Date(timestamp);
-  return date.toLocaleString('zh-CN');
-}
-
-/**
- * HTML转义
- * @param {string} str - 原始字符串
- * @returns {string} 转义后的字符串
- */
 function escapeHtml(str) {
   if (!str) return '';
   return str
@@ -238,13 +195,8 @@ function escapeHtml(str) {
     .replace(/'/g, '&#039;');
 }
 
-// 导出页面模块
 window.chatPage = {
   init,
-  selectSession,
-  loadSessionMessages,
-  renderMessages,
   handleSendMessage,
-  createNewSession,
-  clearMessages
+  appendMessage
 };

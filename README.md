@@ -4,247 +4,430 @@
 
 My RAG Agent 是一个基于检索增强生成（RAG）的智能对话系统，支持多种工具调用、技能管理和知识库检索。系统能够根据用户输入自动识别意图并调用相应的工具，提供智能化的交互体验。
 
-## 功能特性
-
-### 🤖 AI 对话
-
-- 支持多种大模型（DeepSeek、OpenAI、MiniMax 等）
-- 混合模式：知识库检索 + 工具调用
-- 多轮对话上下文记忆
-- 智能意图识别
-
-### 📚 知识库管理
-
-- 支持多种文件格式：PDF、图片、视频、文本
-- 自动内容提取和索引
-- 全文检索功能
-- 文件上传、删除管理
-
-### 🛠️ 技能系统
-
-系统内置多个技能模块：
-
-| 技能名称 | 功能描述 | 触发关键词 |
-|---------|---------|-----------|
-| images-skill | 图片 OCR 识别 | 图片、照片、OCR |
-| videos-skill | 视频内容分析 | 视频、录像 |
-| pdfs-skill | PDF 文档解析 | PDF、文档 |
-| weather-skill | 天气预报查询 | 天气、气温 |
-| location-skill | 地理位置查询 | 省、市、区县 |
-| web-search-skill | 网页搜索 | 搜索、百度 |
-| windows-system-skill | Windows 系统操作 | cmd、命令 |
-
-### 🔧 工具系统
-
-工具系统分为以下类别：
-
-#### 代码执行类
-- **bash** - 执行 Shell 命令
-- **python** - 执行 Python 代码
-
-#### 文件操作类
-- **ls** - 列出目录
-- **read_file** - 读取文件
-- **write_file** - 写入文件
-- **str_replace** - 替换字符串
-
-#### API 工具类
-- **cat_image** - 获取猫咪图片
-- **dog_api** - 获取狗狗图片
-- **anime_image** - 获取动漫图片
-- **wallpaper** - 获取壁纸
-- **quotes** - 获取名言警句
-- **weather** - 天气预报
-- **qrcode** - 生成二维码
-- **random_user** - 生成随机用户
-- **random_image** - 获取随机图片
-- **cat_facts** - 获取猫咪知识
+---
 
 ## 系统架构
 
-### 架构图
+### 整体架构图
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│                        前端 (Browser)                        │
-├─────────────────────────────────────────────────────────────┤
-│  index.html                                                  │
-│    ├── main.js (入口)                                       │
-│    ├── router/router.js (路由)                               │
-│    ├── pages/                                               │
-│    │   ├── chat/chat.js (聊天页面)                          │
-│    │   ├── knowledge/knowledge.js (知识库页面)              │
-│    │   ├── skill-tools/skill-tools.js (技能工具页面)        │
-│    │   └── models/models.js (模型管理页面)                   │
-│    ├── components/ (组件)                                    │
-│    └── utils/api.js (API封装)                               │
-└─────────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────┐
+│                      前端 (Browser)                              │
+│  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐            │
+│  │   聊天页面   │  │  知识库页面  │  │ 技能工具页   │            │
+│  └─────────────┘  └─────────────┘  └─────────────┘            │
+└─────────────────────────────────────────────────────────────────┘
+                              │
+                              ▼ HTTP
+┌─────────────────────────────────────────────────────────────────┐
+│                      后端 (Node.js Express)                     │
+├─────────────────────────────────────────────────────────────────┤
+│  Routes:                                                       │
+│  ├── /api/chat/*        → chatRouter (对话主路由)              │
+│  ├── /api/chat/clarification/* → 追问处理                       │
+│  ├── /api/sessions/*    → sessionRouter (会话管理)             │
+│  ├── /api/models/*      → modelsRouter (模型管理)              │
+│  ├── /api/files/*       → filesRouter (文件管理)              │
+│  └── /api/skills/*      → SkillsCenter API                    │
+└─────────────────────────────────────────────────────────────────┘
                               │
                               ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                     SkillsCenter (技能中心)                      │
+├─────────────────────────────────────────────────────────────────┤
+│  ├── SkillsManager     → 技能注册与管理                          │
+│  ├── ToolsManager      → 工具注册与管理                          │
+│  ├── Clarification     → 渐进式澄清系统                          │
+│  └── AI Service        → AI模型调用封装                         │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## 核心特性
+
+### 1. 智能意图分析
+- **LLM驱动**：全部使用大语言模型进行意图分析，不再使用关键词匹配
+- **能力识别**：LLM返回抽象的能力需求，通过能力映射表匹配具体工具
+- **动态工具匹配**：工具与能力解耦，新增工具只需更新映射表
+- **智能追问**：当信息不完整时，LLM生成自然的追问
+
+### 2. 三种对话模式
+| 模式 | 工具执行 | 知识库 | LLM生成 | 适用场景 |
+|------|---------|--------|---------|---------|
+| **AI** | ✓ | ✗ | ✓ | 通用对话、工具辅助 |
+| **Knowledge** | ✓ | ✓ | ✗ | 纯知识库问答 |
+| **Hybrid** | ✓ | ✓ | ✓ | 综合问答 |
+
+### 3. 渐进式澄清系统
+- 智能检测缺失信息
+- 生成自然的追问话术
+- 提供合理的选项供用户选择
+
+### 4. Token统计
+- 会话级别的Token消耗统计
+- 意图分析Token单独统计
+- 每次对话的Token消耗明细
+
+---
+
+## AI 对话流程
+
+### 完整流程图
+
+```
+用户消息
+    │
+    ▼
 ┌─────────────────────────────────────────────────────────────┐
-│                      后端 (Node.js)                           │
-├─────────────────────────────────────────────────────────────┤
-│  server/index.js (主入口)                                    │
+│ Step 1: 意图分析 (LLM)                                       │
 │                                                              │
-│  ├── routes/ (路由层)                                        │
-│  │   └── chat.js (聊天路由)                                  │
+│ ├─ 意图识别 (intent)                                         │
+│ ├─ 置信度评估 (confidence)                                   │
+│ ├─ 追问检测 (needs_clarification)                            │
+│ ├─ 能力识别 (required_capabilities)                          │
+│ └─ 任务拆解 (task_breakdown)                                 │
+└─────────────────────────────────────────────────────────────┘
+    │
+    ├──→ 需要追问? ──是──→ 返回追问选项
+    │
+    └──→ 不需要追问
+              │
+              ▼
+┌─────────────────────────────────────────────────────────────┐
+│ Step 2: 工具匹配                                             │
 │                                                              │
-│  ├── controllers/ (控制器层)                                   │
-│  │   └── chat-controller.js                                  │
+│ 能力需求 ──→ CAPABILITY_TOOLS映射 ──→ 具体工具名称          │
 │                                                              │
-│  ├── services/ (服务层)                                       │
-│  │   └── chat-service.js                                    │
+│ 例: knowledge_search → search_knowledge_base                │
+│     weather_query → get_weather                            │
+└─────────────────────────────────────────────────────────────┘
+    │
+    ▼
+┌─────────────────────────────────────────────────────────────┐
+│ Step 3: 工具执行 (按模式分发)                                │
 │                                                              │
-│  ├── skills/ (技能系统)                                       │
-│  │   ├── index.js (技能入口)                                 │
-│  │   ├── skills-manager.js (技能管理器)                     │
-│  │   └── skills-manifest.js (技能清单)                      │
+│ ┌──────────────┬──────────────┬──────────────┐            │
+│ │    AI模式     │  Knowledge模式 │   Hybrid模式  │            │
+│ ├──────────────┼──────────────┼──────────────┤            │
+│ │ 执行工具      │ 执行工具      │ 执行工具      │            │
+│ │ (如有)       │              │              │            │
+│ │              │ 知识库检索    │ 知识库检索    │            │
+│ │ 直接LLM生成  │              │              │            │
+│ │              │ 直接返回结果  │ LLM整合结果  │            │
+│ └──────────────┴──────────────┴──────────────┘            │
+└─────────────────────────────────────────────────────────────┘
+    │
+    ▼
+┌─────────────────────────────────────────────────────────────┐
+│ Step 4: 返回结果                                             │
 │                                                              │
-│  ├── tools/ (工具系统)                                       │
-│  │   ├── index.js (工具入口)                                 │
-│  │   ├── tools-manager.js (工具管理器)                      │
-│  │   ├── tools-manifest.js (工具清单)                      │
-│  │   └── sandbox/ (沙箱执行)                                │
-│                                                              │
-│  ├── middleware/ (中间件)                                    │
-│  │   ├── logger.js (日志)                                    │
-│  │   └── error-handler.js (错误处理)                        │
-│                                                              │
-│  └── config/ (配置)                                           │
-│      └── constants.js (常量)                                  │
+│ {                                                           │
+│   type: 'text' | 'clarification',                           │
+│   content: '回复内容',                                        │
+│   intent: '意图分类',                                         │
+│   resultSources: ['知识库', '工具', 'LLM'],                 │
+│   tools: ['tool1', 'tool2'],                               │
+│   tokenUsage: { prompt, completion, total }                 │
+│ }                                                           │
 └─────────────────────────────────────────────────────────────┘
 ```
 
-### 请求处理流程
+### 模式详细流程
+
+#### AI模式
+```
+意图分析(LLM)
+    │
+    ▼
+工具匹配 (能力映射)
+    │
+    ▼
+├─ 有工具 → 执行工具 → 汇总上下文 → LLM生成 → 返回
+│                              ↑
+│                         formatToolResults
+└─ 无工具 → 直接LLM生成 → 返回
+```
+
+#### Knowledge模式
+```
+意图分析(LLM)
+    │
+    ▼
+工具匹配 (能力映射)
+    │
+    ▼
+├─ 有工具 → 执行工具 ─┐
+│                    │
+└─ 无工具 ────────────┼─→ 知识库检索 → 汇总 → 直接返回(不调用LLM)
+                                          ↑
+                                     formatToolResults
+```
+
+#### Hybrid模式
+```
+意图分析(LLM)
+    │
+    ▼
+工具匹配 (能力映射)
+    │
+    ▼
+├─ 有工具 → 执行工具 ─┐
+│                    │
+└─ 无工具 ────────────┼─→ 知识库检索 → 汇总 → LLM整合 → 返回
+                                          ↑              ↑
+                                     formatToolResults  callAI
+```
+
+---
+
+## 意图分析系统
+
+### 意图分类体系
+
+| 意图 | 描述 | 所需能力 |
+|------|------|---------|
+| greeting | 问候、打招呼 | - |
+| chat | 闲聊 | - |
+| knowledge_query | 知识库查询 | knowledge_search |
+| web_query | 网络搜索 | web_search |
+| weather_query | 天气查询 | weather_query |
+| location_query | 位置查询 | location_query |
+| file_read | 读取文件 | file_read |
+| file_write | 写入文件 | file_write |
+| file_edit | 修改文件 | file_edit |
+| code_execute | 执行代码 | code_execute |
+| command_execute | 执行命令 | command_execute |
+| image_understand | 图片理解 | image_understand |
+| document_understand | 文档理解 | document_understand |
+| data_process | 数据处理 | data_process |
+
+### 能力到工具映射
+
+```javascript
+const CAPABILITY_TOOLS = {
+  'knowledge_search': ['search_knowledge_base'],
+  'web_search': ['web_search'],
+  'weather_query': ['get_weather'],
+  'location_query': ['get_location'],
+  'file_read': ['read_file'],
+  'file_write': ['write_file'],
+  'file_edit': ['str_replace'],
+  'code_execute': ['python'],
+  'command_execute': ['bash'],
+  'image_understand': ['recognize_image'],
+  'document_understand': ['extract_pdf_text'],
+  'data_process': ['python', 'bash']
+};
+```
+
+---
+
+## 工具系统 (Tools)
+
+### 工具定义 (13个)
+
+| 工具名称 | 功能 | 参数 |
+|---------|------|------|
+| `search_knowledge_base` | 搜索知识库 | query, file_types, max_results |
+| `get_weather` | 查询天气 | city |
+| `get_location` | 查询位置 | location |
+| `web_search` | 网页搜索 | query, max_results |
+| `recognize_image` | OCR识别图片 | filename |
+| `extract_pdf_text` | 提取PDF文字 | filename |
+| `analyze_video` | 分析视频内容 | filename |
+| `python` | 执行Python代码 | code, description |
+| `bash` | 执行Shell命令 | command, description |
+| `ls` | 列出目录 | path |
+| `read_file` | 读取文件 | path |
+| `write_file` | 写入文件 | path, content |
+| `str_replace` | 替换文件内容 | path, old_str, new_str |
+
+---
+
+## API 接口文档
+
+### 聊天接口
+
+#### POST /api/chat
+
+发送聊天消息
+
+**请求参数：**
+
+| 参数 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| message | string | ✓ | 用户输入 |
+| sessionId | string | ✗ | 会话ID |
+| mode | string | ✓ | 模式: `ai` / `knowledge` / `hybrid` |
+| model | string | ✗ | 模型ID（默认使用激活模型） |
+
+**响应示例：**
+
+```json
+{
+  "type": "text",
+  "content": "北京今天天气晴朗，气温15-25度...",
+  "intent": "weather_query",
+  "source": "llm",
+  "tools": ["get_weather"],
+  "resultSources": ["工具", "LLM"],
+  "tokenUsage": {
+    "prompt": 128,
+    "completion": 256,
+    "total": 384
+  }
+}
+```
+
+**追问响应：**
+
+```json
+{
+  "type": "clarification",
+  "question": "请问您想查询哪个城市呢？",
+  "options": ["北京", "上海", "广州", "其他"],
+  "intent": "weather_query",
+  "tokenUsage": {
+    "prompt": 120,
+    "completion": 45,
+    "total": 165
+  }
+}
+```
+
+#### POST /api/chat/clarification/respond
+
+回复追问
+
+**请求参数：**
+
+| 参数 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| clarification_id | string | ✓ | 追问ID |
+| response | string | ✓ | 用户的选择/输入 |
+| sessionId | string | ✗ | 会话ID |
+| mode | string | ✗ | 模式 |
+
+---
+
+## 日志输出
+
+系统提供完整的日志追踪：
 
 ```
-用户输入 → HTTP POST /api/chat
-    │
-    ▼
-路由层 (routes/chat.js)
-    │
-    ▼
-意图识别 (extractMatchedIntents)
-    │
-    ├── 系统意图 (rename_bot, ask_name...) → 特殊处理
-    │
-    └── 工具意图 → matchTools (trigger匹配)
-    │
-    ▼
-工具选择 (selectTools)
-    │
-    ▼
-工具执行 (skillsCenter.executeTool)
-    │
-    ├── 知识库工具 → processFile
-    ├── 技能工具 → skill.process
-    ├── 沙箱工具 → sandbox.execute
-    └── API工具 → HTTP请求
-    │
-    ▼
-LLM调用 (generateResponse)
-    │
-    ▼
-返回结果
+========== 开始处理用户消息 ==========
+[用户输入]: 今天北京天气怎么样？
+[使用模型]: MiniMax-M2.5
+[对话模式]: hybrid
+
+========== 意图分析 ==========
+[Intent] 用户Query: 今天北京天气怎么样？
+[Intent] 对话模式: hybrid
+[Intent] 强制使用LLM进行意图分析...
+[Intent] ✓ LLM分析成功
+[Intent]   - 意图: weather_query
+[Intent]   - 意图描述: 用户查询北京今天的天气预报
+[Intent]   - 置信度: 0.95
+[Intent]   - 需要追问: false
+[Intent]   - 所需能力: weather_query
+[Intent]   - 任务拆解: 天气查询 → 返回结果
+[Intent]   - Token消耗: 128 tokens
+[Intent] ✓ 无需追问，继续处理
+
+========== 工具匹配 ==========
+[Tool] 意图: weather_query
+[Tool] 用户Query: 今天北京天气怎么样？
+[Tool] 对话模式: hybrid
+[Tool] LLM返回的能力需求: weather_query
+[Tool] ✓ 能力匹配结果: get_weather
+[Tool] 最终选择的工具: get_weather
+
+========== LLM回复生成 ==========
+[LLM] 使用模型: MiniMax-M2.5
+[LLM] 对话模式: hybrid
+[LLM] 工具上下文长度: 89 字符
+[LLM] 系统提示词长度: 1523 字符
+[LLM] 正在调用LLM...
+[LLM Response] | 回复消耗: 256 tokens
+[LLM Total] | 384 tokens (prompt: 128, completion: 256)
+
+========== 消息处理完成 ==========
 ```
+
+---
 
 ## 目录结构
 
 ```
 my-rag-agent/
 ├── public/                     # 前端静态资源
-│   ├── index.html             # 主页面
-│   ├── main.js                # 前端入口
-│   ├── app.js                 # (旧) 应用主文件
-│   ├── style.css              # (旧) 样式文件
-│   ├── router/                # 路由模块
-│   │   └── router.js
-│   ├── pages/                 # 页面模块
-│   │   ├── chat/chat.js
-│   │   ├── knowledge/knowledge.js
-│   │   ├── skill-tools/skill-tools.js
-│   │   └── models/models.js
-│   ├── components/            # 组件
-│   │   └── navigation/
-│   └── utils/                 # 工具函数
-│       └── api.js
+│   ├── index.html            # 主页面
+│   ├── app.js               # 前端入口
+│   ├── router/              # 路由模块
+│   ├── pages/                # 页面模块
+│   │   ├── chat/           # 聊天页面
+│   │   ├── knowledge/       # 知识库页面
+│   │   ├── skill-tools/     # 技能工具页面
+│   │   └── models/          # 模型管理页面
+│   ├── components/           # 公共组件
+│   └── utils/                # 工具函数
 │
-├── server/                    # 后端服务
-│   ├── index.js               # 主入口
-│   ├── routes/                # 路由
-│   │   └── chat.js
-│   ├── controllers/           # 控制器
-│   │   └── chat-controller.js
-│   ├── services/              # 服务层
-│   │   └── chat-service.js
+├── server/                   # 后端服务
+│   ├── index.js              # 服务入口
+│   ├── controllers/           # HTTP处理层
+│   │   ├── chat-controller.js
+│   │   ├── session-controller.js
+│   │   ├── model-controller.js
+│   │   └── file-controller.js
+│   │
+│   ├── services/             # 业务逻辑层
+│   │   ├── chat-service.js   # 聊天核心业务 ⭐
+│   │   ├── ai-service.js     # AI调用封装
+│   │   ├── session-service.js
+│   │   ├── model-service.js
+│   │   └── file-service.js
+│   │
 │   ├── skills/               # 技能系统
-│   │   ├── index.js
+│   │   ├── index.js         # 技能中心入口
+│   │   ├── skills.js        # 技能主逻辑
 │   │   ├── skills-manager.js
-│   │   └── skills-manifest.js
+│   │   ├── base-skill.js
+│   │   └── [skill-folders]/
+│   │
 │   ├── tools/                # 工具系统
 │   │   ├── index.js
 │   │   ├── tools-manager.js
-│   │   ├── tools-manifest.js
-│   │   ├── sandbox/
-│   │   │   ├── sandbox.js
-│   │   │   ├── bash.js
-│   │   │   ├── python.js
-│   │   │   └── ...
-│   │   └── api-tools/
-│   │       ├── cat-image.js
-│   │       ├── weather.js
-│   │       └── ...
-│   ├── middleware/           # 中间件
-│   │   ├── logger.js
-│   │   └── error-handler.js
+│   │   └── tool-definitions.js
+│   │
+│   ├── clarification/       # 追问系统
+│   │   └── index.js
+│   │
 │   └── config/               # 配置
-│       └── constants.js
 │
-├── knowledge/                 # 知识库文件存储
-├── data/                      # 数据存储
-│   └── models.json            # 模型配置
+├── docs/                      # 文档
+│   └── architecture.md       # 架构文档
 │
-├── .trae/                     # Trae IDE 配置
-│   └── documents/             # 文档
+├── knowledge/                # 知识库文件存储
+├── data/                     # 数据存储
+│   ├── models.json          # 模型配置
+│   └── sessions.json         # 会话数据
 │
-├── package.json
-└── README.md
+└── package.json
 ```
 
-## API 接口
-
-### 聊天接口
-
-| 方法 | 路径 | 描述 |
-|------|------|------|
-| POST | /api/chat | 发送聊天消息 |
-| GET | /api/chat/sessions | 获取会话列表 |
-| POST | /api/chat/sessions | 创建新会话 |
-| GET | /api/chat/history/:sessionId | 获取会话历史 |
-
-### 文件接口
-
-| 方法 | 路径 | 描述 |
-|------|------|------|
-| GET | /api/files | 获取文件列表 |
-| POST | /api/files/upload | 上传文件 |
-| DELETE | /api/files/:filename | 删除文件 |
-
-### 技能接口
-
-| 方法 | 路径 | 描述 |
-|------|------|------|
-| GET | /api/skills | 获取所有技能和工具 |
-
-### 模型接口
-
-| 方法 | 路径 | 描述 |
-|------|------|------|
-| GET | /api/models | 获取模型列表 |
-| POST | /api/models/:id | 更新模型配置 |
-| POST | /api/models/:id/test | 测试模型连接 |
+---
 
 ## 配置说明
+
+### 环境变量 (.env)
+
+```bash
+PORT=3000
+API_KEY=your-api-key
+API_BASE_URL=https://api.siliconflow.cn/v1
+NODE_ENV=development
+```
 
 ### 模型配置 (data/models.json)
 
@@ -254,37 +437,33 @@ my-rag-agent/
     "id": "deepseek-r1",
     "name": "DeepSeek R1",
     "modelId": "deepseek-ai/DeepSeek-R1-0528-Qwen3-8B",
+    "type": "chat",
+    "protocol": "openai",
     "url": "https://api.siliconflow.cn/v1/chat/completions",
     "apiKey": "your-api-key",
-    "isActive": true
+    "provider": "硅基流动",
+    "published": true
   }
 ]
 ```
 
-### 工具配置 (tools-manifest.js)
+**模型配置字段说明：**
 
-每个工具定义包含：
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| id | string | 模型标识（唯一） |
+| name | string | 显示名称 |
+| modelId | string | API调用用的模型ID ⭐ |
+| type | string | 模型类型（chat/embedding） |
+| protocol | string | 通信协议（openai/anthropic/minimax） |
+| url | string | API地址 |
+| apiKey | string | API密钥 |
+| provider | string | 供应商名称 |
+| published | boolean | 发布状态（是否可用） |
 
-```javascript
-{
-  name: '工具名称',
-  category: '分类',
-  description: '功能描述',
-  trigger: ['触发关键词1', '触发关键词2'],
-  usage: '使用方法说明',
-  parameters: {
-    paramName: {
-      type: '类型',
-      description: '参数描述'
-    }
-  },
-  requiredParams: ['必填参数'],
-  file: '工具文件路径',
-  functionName: '函数名'
-}
-```
+---
 
-## 开发指南
+## 快速开始
 
 ### 环境要求
 
@@ -297,20 +476,57 @@ my-rag-agent/
 npm install
 ```
 
-### 启动开发服务器
+### 启动服务器
 
 ```bash
 npm run dev
+# 或
+node server/index.js
 ```
 
 访问 http://localhost:3000
 
-### 项目结构说明
+---
 
-- `public/` - 前端资源，浏览器直接访问
-- `server/` - 后端服务，Node.js 运行
-- `knowledge/` - 用户上传的知识库文件
-- `data/` - JSON 格式的数据存储
+## 开发指南
+
+### 添加新工具
+
+#### 1. 定义工具能力映射
+
+在 `server/skills/skills.js` 的 `CAPABILITY_TOOLS` 中添加工具映射：
+
+```javascript
+const CAPABILITY_TOOLS = {
+  // ... 现有映射
+  'my_capability': ['my_tool']  // 新增
+};
+```
+
+#### 2. 添加工具定义
+
+在 `toolDefinitions` 数组中添加：
+
+```javascript
+{
+  type: 'function',
+  function: {
+    name: 'my_tool',
+    description: '我的工具描述',
+    parameters: { /* JSON Schema */ }
+  }
+}
+```
+
+#### 3. 实现工具逻辑
+
+在 `executeTool` 函数中添加处理分支。
+
+### 更新LLM意图分析
+
+意图分析提示词位于 `server/services/chat-service.js` 的 `INTENT_ANALYSIS_PROMPT`。
+
+---
 
 ## 技术栈
 
@@ -319,211 +535,7 @@ npm run dev
 - **AI 模型**: 支持 OpenAI 兼容 API
 - **数据存储**: JSON 文件系统
 
-## 扩展指南
-
-### 添加新技能
-
-#### 步骤 1：创建技能处理文件
-
-在 `server/skills/` 目录下创建技能类文件，例如 `server/skills/my-skill/my-skill.js`：
-
-```javascript
-const BaseSkill = require('../base-skill');
-
-class MySkill extends BaseSkill {
-  /**
-   * 处理技能请求
-   * @param {Object} params - 技能参数
-   * @param {Object} context - 执行上下文
-   * @returns {Object} 处理结果
-   */
-  async process(params, context) {
-    // 实现技能逻辑
-    return { success: true, result: '处理结果' };
-  }
-}
-
-module.exports = MySkill;
-```
-
-#### 步骤 2：在技能清单中注册
-
-在 `server/skills/skills-manifest.js` 中添加技能配置：
-
-```javascript
-{
-  name: 'my-skill',              // 【必填】技能唯一标识名称
-  description: '我的技能描述',     // 【必填】技能的详细功能描述
-  trigger: ['关键词1', '关键词2'], // 【必填】触发技能的关键词数组
-  usage: '如何使用这个技能',       // 【必填】技能的使用说明
-  tools: ['tool1', 'tool2'],     // 【必填】该技能使用的工具名称数组
-  supportedTypes: ['.pdf', '.doc'], // 【可选】支持的文件扩展名数组，空数组表示不处理文件
-  requiredParams: ['param1'],     // 【必填】必需的参数名称数组
-  file: path.join(__dirname, 'my-skill/my-skill.js')  // 【必填】技能文件路径
-}
-```
-
-#### 技能属性说明
-
-| 属性 | 必填 | 类型 | 说明 |
-|-----|------|------|------|
-| name | ✅ | string | 技能唯一标识，不能与其他技能重名 |
-| description | ✅ | string | 技能的详细功能描述，会显示在技能工具管理页面 |
-| trigger | ✅ | array | 触发关键词数组，当用户输入包含这些词时会激活该技能 |
-| usage | ✅ | string | 技能的使用说明，告知用户如何正确使用 |
-| tools | ✅ | array | 该技能使用的工具名称数组，工具必须在 tools-manifest 中定义 |
-| supportedTypes | ❌ | array | 支持的文件扩展名，如 `['.pdf', '.jpg']`，空数组表示不处理文件 |
-| requiredParams | ✅ | array | 必需的参数名称数组 |
-| file | ✅ | string | 技能类的文件路径，使用 `path.join(__dirname, ...)` |
-
-#### 步骤 3：重启服务器
-
-新增技能后重启服务器，访问「技能工具管理」页面即可看到新增的技能。
-
 ---
-
-### 添加新工具
-
-#### 工具类型说明
-
-系统中的工具有三种类型：
-
-1. **沙箱工具**：在沙盒环境中执行代码（bash, python）
-2. **技能工具**：需要配合技能使用的工具（recognize_image, extract_pdf_text）
-3. **API 工具**：调用外部 API 获取数据的工具（cat_image, weather）
-
-#### 步骤 1：创建工具文件
-
-**对于 API 工具**（推荐），在 `server/tools/` 下创建工具文件，例如 `server/tools/my-api/my-api.js`：
-
-```javascript
-/**
- * 我的 API 工具
- * @param {Object} args - 工具参数
- * @param {Object} context - 执行上下文
- * @returns {Object} 执行结果
- */
-module.exports = async function(args, context) {
-  try {
-    // 调用外部 API
-    const response = await fetch('https://api.example.com/data');
-    const data = await response.json();
-
-    return {
-      success: true,
-      result: data
-    };
-  } catch (error) {
-    return {
-      success: false,
-      error: error.message
-    };
-  }
-};
-```
-
-**对于沙箱工具**，参考 `server/tools/bash/bash.js` 或 `server/tools/python/python.js`。
-
-#### 步骤 2：在工具清单中注册
-
-在 `server/tools/tools-manifest.js` 中添加工具配置：
-
-```javascript
-{
-  name: 'my_tool',                // 【必填】工具唯一标识名称
-  category: '我的分类',            // 【必填】工具分类，会显示在技能工具管理页面
-  description: '我的工具描述',      // 【必填】工具的详细功能描述
-  trigger: ['关键词1', '关键词2'], // 【必填】触发工具的关键词数组
-  usage: '如何使用这个工具',        // 【必填】工具的使用说明
-  parameters: {                    // 【可选】工具参数定义
-    param1: {
-      type: 'string',             // 参数类型：string, integer, boolean, object, array
-      description: '参数描述'     // 参数的说明
-    }
-  },
-  requiredParams: ['param1'],      // 【可选】必需的参数名称数组
-  file: path.join(__dirname, 'my-api/my-api.js'),  // 【必填】工具文件路径
-  functionName: 'execute'           // 【可选】导出函数名，默认 'execute'
-}
-```
-
-#### 工具属性说明
-
-| 属性 | 必填 | 类型 | 说明 |
-|-----|------|------|------|
-| name | ✅ | string | 工具唯一标识，不能与其他工具重名 |
-| category | ✅ | string | 工具分类，用于在技能工具管理页面分组展示 |
-| description | ✅ | string | 工具的详细功能描述 |
-| trigger | ✅ | array | 触发关键词数组，当用户输入包含这些词时会匹配该工具 |
-| usage | ✅ | string | 工具的使用说明，告知用户如何正确使用 |
-| parameters | ❌ | object | 工具参数定义，键为参数名，值为参数类型和描述 |
-| requiredParams | ❌ | array | 必需的参数名称数组 |
-| file | ✅ | string | 工具文件的路径 |
-| functionName | ❌ | string | 导出函数名，默认导出 `execute` 函数 |
-
-#### 步骤 3：重启服务器
-
-新增工具后重启服务器，访问「技能工具管理」页面即可看到新增的工具。
-
----
-
-### 添加新页面
-
-#### 页面开发规范
-
-1. **创建页面目录**：在 `public/pages/` 下创建页面文件夹，如 `public/pages/my-page/`
-
-2. **创建页面模块文件** `public/pages/my-page/my-page.js`：
-
-```javascript
-/**
- * 我的页面模块
- * @description 页面功能描述
- * @module pages/my-page
- */
-
-/**
- * 页面初始化函数
- * @description 页面加载时调用的初始化函数
- */
-function init() {
-  console.log('[MyPage] 页面初始化');
-  // 绑定事件监听
-  // 加载数据
-  // 渲染UI
-}
-
-/**
- * 页面退出函数（可选）
- * @description 页面切换时调用的清理函数
- */
-function destroy() {
-  // 清理事件监听
-  // 取消定时器等
-}
-
-// 导出页面模块
-window.myPageModule = {
-  init,
-  destroy  // 可选
-};
-```
-
-3. **在 index.html 中添加页面容器**：
-
-```html
-<div id="myPage" class="page">
-  <!-- 页面内容 -->
-</div>
-```
-
-4. **在菜单中添加导航**（可选）：
-
-在 `index.html` 的菜单中添加菜单项：
-
-```html
-<div class="menu-item" data-page="my-page">我的页面</div>
-```
 
 ## License
 

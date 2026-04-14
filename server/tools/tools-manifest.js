@@ -4,7 +4,15 @@ const toolsManifest = [
   {
     name: 'bash',
     category: '代码执行',
-    description: '在沙盒环境中执行 Shell 命令（Windows CMD 或 Linux Bash）',
+    description: `在沙盒环境中执行 Shell 命令（Windows CMD 或 Linux Bash）。
+
+使用场景：
+- 需要执行系统命令时使用
+- 如：列出目录、运行脚本、查询系统信息等
+
+示例：
+- "列出 D 盘根目录文件" → {"command": "dir D:\\", "description": "列出 D 盘根目录"}
+- "查看系统进程" → {"command": "tasklist", "description": "查看当前运行进程"}`,
     trigger: ['执行', '运行', '命令', 'shell', 'cmd'],
     usage: '输入要执行的命令，系统在沙盒环境中执行并返回结果',
     parameters: {
@@ -18,7 +26,16 @@ const toolsManifest = [
   {
     name: 'python',
     category: '代码执行',
-    description: '在沙盒环境中执行 Python 代码',
+    description: `在沙盒环境中执行 Python 代码。
+
+使用场景：
+- 数据处理和分析
+- 文本处理
+- 快速计算
+
+示例：
+- "计算 1+1" → {"code": "print(1+1)", "description": "简单加法计算"}
+- "处理 JSON 数据" → {"code": "import json; data = json.loads('{}')", "description": "解析 JSON"}`,
     trigger: ['python', '代码', '执行', '运行python'],
     usage: '输入Python代码，系统执行并返回运行结果',
     parameters: {
@@ -32,7 +49,16 @@ const toolsManifest = [
   {
     name: 'ls',
     category: '文件操作',
-    description: '列出指定目录的内容',
+    description: `列出指定目录的内容。
+
+使用场景：
+- 查看文件夹中有哪些文件
+- 浏览目录结构
+- 确认文件是否存在
+
+示例：
+- "查看桌面" → {"path": "C:\\Users\\Desktop", "description": "查看桌面文件"}
+- "列出当前目录" → {"path": ".", "description": "列出当前目录内容"}`,
     trigger: ['列出', '列表', '目录', '查看文件'],
     usage: '输入目录路径，列出该目录下的所有文件和子目录',
     parameters: {
@@ -46,7 +72,16 @@ const toolsManifest = [
   {
     name: 'read_file',
     category: '文件操作',
-    description: '读取文本文件的内容',
+    description: `读取文本文件的内容。
+
+使用场景：
+- 查看代码文件
+- 读取配置文件
+- 查看文档内容
+
+示例：
+- "查看配置文件" → {"path": "config.json", "description": "读取配置文件"}
+- "查看代码第10-20行" → {"path": "main.js", "start_line": 10, "end_line": 20, "description": "查看代码片段"}`,
     trigger: ['读取', '查看', '看文件'],
     usage: '输入文件路径，系统读取并返回文件内容',
     parameters: {
@@ -62,13 +97,22 @@ const toolsManifest = [
   {
     name: 'write_file',
     category: '文件操作',
-    description: '创建新文件或覆盖/追加内容到已有文件',
+    description: `创建新文件或追加内容到已有文件。
+
+使用场景：
+- 创建代码文件
+- 保存配置
+- 写入数据
+
+示例：
+- "创建配置文件" → {"path": "config.json", "content": "{}", "description": "创建配置"}
+- "追加日志" → {"path": "log.txt", "content": "新日志行", "append": true, "description": "追加日志"}`,
     trigger: ['写入', '创建', '保存', '写文件'],
     usage: '输入文件路径和内容，系统创建或更新文件',
     parameters: {
       path: { type: 'string', description: '要写入的文件路径' },
       content: { type: 'string', description: '要写入的文件内容' },
-      append: { type: 'boolean', description: '可选，追加模式' },
+      append: { type: 'boolean', description: '可选，追加模式，默认false覆盖' },
       description: { type: 'string', description: '简短说明写入这个文件的目的' }
     },
     requiredParams: ['path', 'content', 'description'],
@@ -78,14 +122,23 @@ const toolsManifest = [
   {
     name: 'str_replace',
     category: '文件操作',
-    description: '替换文件中的指定字符串',
+    description: `替换文件中的指定字符串。
+
+使用场景：
+- 修改代码
+- 更新配置
+- 编辑文档
+
+示例：
+- "修改函数名" → {"path": "main.js", "old_str": "foo()", "new_str": "bar()", "description": "修改变量名"}
+- "替换所有匹配" → {"path": "config.json", "old_str": "old_value", "new_str": "new_value", "replace_all": true, "description": "批量替换"}`,
     trigger: ['替换', '修改', '改内容'],
     usage: '输入文件路径、原字符串和新字符串，系统替换并更新文件',
     parameters: {
       path: { type: 'string', description: '要修改的文件路径' },
       old_str: { type: 'string', description: '要替换的原始字符串' },
       new_str: { type: 'string', description: '替换后的新字符串' },
-      replace_all: { type: 'boolean', description: '可选，是否替换所有匹配项' },
+      replace_all: { type: 'boolean', description: '可选，是否替换所有匹配项，默认false' },
       description: { type: 'string', description: '简短说明为什么要进行这个替换' }
     },
     requiredParams: ['path', 'old_str', 'new_str', 'description'],

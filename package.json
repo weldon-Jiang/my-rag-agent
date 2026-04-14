@@ -8,7 +8,8 @@
     "dev": "node server/index.js",
     "go": "powershell -ExecutionPolicy Bypass -File start.ps1",
     "electron": "electron .",
-    "build:electron": "set ELECTRON_BUILDER_CACHE=.\\.cache\\electron&& set ELECTRON_MIRROR=https://npmmirror.com/mirrors/electron/&& set ELECTRON_BUILDER_BINARIES_MIRROR=https://npmmirror.com/mirrors/electron-builder-binaries/&& electron-builder --win --dir"
+    "build:electron": "set ELECTRON_BUILDER_CACHE=.\\.cache\\electron&& set ELECTRON_MIRROR=https://npmmirror.com/mirrors/electron/&& set ELECTRON_BUILDER_BINARIES_MIRROR=https://npmmirror.com/mirrors/electron-builder-binaries/&& electron-builder --win --dir",
+    "build:electron:portable": "set ELECTRON_BUILDER_CACHE=.\\.cache\\electron&& set ELECTRON_MIRROR=https://npmmirror.com/mirrors/electron/&& set ELECTRON_BUILDER_BINARIES_MIRROR=https://npmmirror.com/mirrors/electron-builder-binaries/&& electron-builder --win"
   },
   "build": {
     "appId": "com.chinatravel.myragagent",
@@ -17,13 +18,20 @@
       "output": "dist"
     },
     "asar": false,
+    "files": [
+      "**/*",
+      "!dist/**/*",
+      "!.git/**/*",
+      "!.trae/**/*",
+      "data/**/*",
+      "knowledge/**/*",
+      ".env"
+    ],
+    "extraMetadata": {
+      "main": "electron/main.js"
+    },
     "win": {
-      "target": [
-        {
-          "target": "portable",
-          "arch": ["x64"]
-        }
-      ]
+      "target": "portable"
     }
   },
   "keywords": [

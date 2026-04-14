@@ -4,12 +4,11 @@ const security = require('../security');
 async function execute(args, context = {}) {
   let { path: filePath, start_line: startLine, end_line: endLine, description = '' } = args;
 
-  console.log(`[read_file tool] Reading file: ${filePath}`);
+  console.log(`[工具] read: ${filePath}`);
 
   try {
     const convertedPath = security.convertWindowsPath(filePath);
     if (convertedPath !== filePath) {
-      console.log(`[read_file tool] Converted Windows path: ${filePath} -> ${convertedPath}`);
       filePath = convertedPath;
     }
 
@@ -17,7 +16,7 @@ async function execute(args, context = {}) {
     const result = executor.readFile(filePath, { startLine, endLine });
     return result;
   } catch (error) {
-    console.error(`[read_file tool] Error: ${error.message}`);
+    console.error(`[工具] read 错误: ${error.message}`);
     return { success: false, error: error.message };
   }
 }

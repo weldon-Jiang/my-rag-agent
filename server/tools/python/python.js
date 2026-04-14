@@ -3,7 +3,7 @@ const executor = require('../executor');
 async function execute(args, context = {}) {
   const { code, description = '' } = args;
 
-  console.log(`[python tool] Executing Python code`);
+  console.log(`[工具] python: ${code.substring(0, 30)}...`);
 
   try {
     if (!code || typeof code !== 'string') {
@@ -19,7 +19,7 @@ async function execute(args, context = {}) {
       duration: result.duration
     };
   } catch (error) {
-    console.error(`[python tool] Error: ${error.message}`);
+    console.error(`[工具] python 错误: ${error.message}`);
     return { success: false, error: error.message };
   }
 }
