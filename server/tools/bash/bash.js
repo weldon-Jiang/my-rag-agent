@@ -6,7 +6,7 @@ const { validateBashCommand, checkCommandSafety } = security;
 async function execute(args, context = {}) {
   const { command, description = '' } = args;
 
-  console.log(`[bash tool] Executing: ${command}`);
+  console.log(`[工具] bash: ${command.substring(0, 50)}${command.length > 50 ? '...' : ''}`);
 
   try {
     validateBashCommand(command);
@@ -36,7 +36,7 @@ async function execute(args, context = {}) {
       duration: result.duration
     };
   } catch (error) {
-    console.error(`[bash tool] Error: ${error.message}`);
+    console.error(`[工具] bash 错误: ${error.message}`);
     return { success: false, error: error.message };
   }
 }

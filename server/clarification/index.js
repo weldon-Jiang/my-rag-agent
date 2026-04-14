@@ -88,7 +88,7 @@ function askClarification(args, context = {}) {
 
   pendingClarifications.set(clarificationId, clarification);
 
-  console.log(`[Clarification] Created clarification request: ${clarificationId}`);
+  console.log(`[渐进式披露] 创建请求: type=${clarification_type}, question=${question.substring(0, 50)}...`);
 
   const formattedMessage = formatClarificationMessage(clarification);
 
@@ -106,6 +106,21 @@ function askClarification(args, context = {}) {
 
 function getPendingClarification(clarificationId) {
   return pendingClarifications.get(clarificationId) || null;
+}
+
+function saveClarification(clarificationId, question, options, sessionId = 'default') {
+  const clarification = {
+    id: clarificationId,
+    sessionId,
+    question,
+    clarification_type: 'missing_info',
+    options: options || [],
+    timestamp: Date.now(),
+    status: 'pending'
+  };
+  pendingClarifications.set(clarificationId, clarification);
+  console.log(`[渐进式披露] 保存追问: id=${clarificationId}, question=${question.substring(0, 30)}...`);
+  return clarification;
 }
 
 function getSessionClarifications(sessionId) {
@@ -134,7 +149,7 @@ function respondToClarification(clarificationId, response) {
 
   pendingClarifications.set(clarificationId, clarification);
 
-  console.log(`[Clarification] Received response for ${clarificationId}: ${response}`);
+  console.log(`[渐进式披露] 收到响应: id=${clarificationId}, response=${response.substring(0, 50)}...`);
 
   return {
     success: true,
@@ -147,7 +162,7 @@ function respondToClarification(clarificationId, response) {
 function clearClarification(clarificationId) {
   if (pendingClarifications.has(clarificationId)) {
     pendingClarifications.delete(clarificationId);
-    console.log(`[Clarification] Cleared clarification: ${clarificationId}`);
+    console.log(`[渐进式披露] 清除: id=${clarificationId}`);
     return { success: true };
   }
   return { success: false, error: 'Clarification not found' };
@@ -161,7 +176,7 @@ function clearSessionClarifications(sessionId) {
       cleared++;
     }
   }
-  console.log(`[Clarification] Cleared ${cleared} clarifications for session ${sessionId}`);
+  console.log(`[渐进式披露] 清除会话 ${sessionId} 的 ${cleared} 个请求`);
   return { success: true, cleared };
 }
 
@@ -187,7 +202,7 @@ function autoExpireClarifications(maxAgeMs = 10 * 60 * 1000) {
   }
 
   if (expired > 0) {
-    console.log(`[Clarification] Expired ${expired} clarifications`);
+    console.log(`[渐进式披露] 过期 ${expired} 个请求`);
   }
 
   return { expired };
@@ -196,6 +211,7 @@ function autoExpireClarifications(maxAgeMs = 10 * 60 * 1000) {
 module.exports = {
   askClarification,
   getPendingClarification,
+  saveClarification,
   getSessionClarifications,
   respondToClarification,
   clearClarification,

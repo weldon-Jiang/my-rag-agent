@@ -3,7 +3,7 @@ const axios = require('axios');
 async function execute(args, context = {}) {
   const { city = '', description = '' } = args;
 
-  console.log(`[weather tool] Fetching weather data for: ${city || 'default'}`);
+  console.log(`[工具] weather: ${city || 'default'}`);
 
   try {
     let query = city;

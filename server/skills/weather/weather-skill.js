@@ -1,4 +1,4 @@
-﻿const axios = require('axios');
+const axios = require('axios');
 const BaseSkill = require('../base-skill');
 
 const WEATHER_CODES = {
@@ -27,23 +27,136 @@ const WEATHER_CODES = {
   99: '强雷暴伴冰雹',
 };
 
+/**
+ * 从复杂上下文中提取日期
+ * @param {string} context - 原始上下文字符串
+ * @param {string} currentQuery - 当前查询
+ * @returns {string} 提取的日期字符串
+ */
+function extractDateFromContext(context, currentQuery) {
+  const dateWords = [
+    '今儿', '今天', '本日', '今日',
+    '明儿', '明天', '明日',
+    '后天', '后日',
+    '大后天',
+    '昨天', '昨日',
+    '前天', '前几日',
+    '上周', '本周', '下周',
+    '这周六', '下周六', '这周日', '下周日', '这周六日', '下周六日',
+    '本周六', '下周六', '本周末', '下周末',
+    '周六', '周日', '周末'
+  ];
+
+  if (context && context.includes('【对话上下文】')) {
+    const currentAnswerMatch = context.match(/当前回答[：:]\s*([^\n]+)/i);
+    if (currentAnswerMatch && currentAnswerMatch[1]) {
+      const currentAnswer = currentAnswerMatch[1].trim();
+      for (const word of dateWords) {
+        if (currentAnswer.includes(word)) {
+          console.log(`[extractDateFromContext] 从当前回答匹配到日期词: "${word}", 完整内容: "${currentAnswer}"`);
+          return currentAnswer;
+        }
+      }
+    }
+
+    const originalMatch = context.match(/原始问题[：:]\s*([^\n]+)/i);
+    if (originalMatch && originalMatch[1]) {
+      const original = originalMatch[1].trim();
+      for (const word of dateWords) {
+        if (original.includes(word)) {
+          console.log(`[extractDateFromContext] 从原始问题匹配到日期词: "${word}", 完整内容: "${original}"`);
+          return original;
+        }
+      }
+    }
+  }
+
+  for (const word of dateWords) {
+    if (currentQuery.includes(word)) {
+      console.log(`[extractDateFromContext] 从当前查询匹配到日期词: "${word}"`);
+      return currentQuery;
+    }
+  }
+
+  if (context && context !== currentQuery) {
+    for (const word of dateWords) {
+      if (context.includes(word)) {
+        console.log(`[extractDateFromContext] 从原始查询(context)匹配到日期词: "${word}", context: "${context}"`);
+        return context;
+      }
+    }
+  }
+
+  console.log(`[extractDateFromContext] 未匹配到任何日期词，当前查询: "${currentQuery}", context: "${context}"`);
+  return currentQuery;
+}
+
 function parseWeatherDate(query) {
   const now = new Date();
   const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
 
   const patterns = [
-    { regex: /今天/i, days: 0 },
-    { regex: /明天/i, days: 1 },
-    { regex: /后天/i, days: 2 },
+    { regex: /今儿|今天|本日|今日/i, days: 0 },
+    { regex: /明儿|明天|明日/i, days: 1 },
+    { regex: /后天|后日/i, days: 2 },
     { regex: /大后天/i, days: 3 },
-    { regex: /昨天/i, days: -1 },
-    { regex: /前天/i, days: -2 },
+    { regex: /昨天|昨日/i, days: -1 },
+    { regex: /前天|前几日/i, days: -2 },
+    { regex: /上周/gi, weeks: -1 },
+    { regex: /下周/gi, weeks: 1 },
+    { regex: /本周/gi, weeks: 0 },
   ];
 
   for (const p of patterns) {
     if (p.regex.test(query)) {
       const d = new Date(today);
-      d.setDate(d.getDate() + p.days);
+      if (p.days !== undefined) {
+        d.setDate(d.getDate() + p.days);
+        return d;
+      }
+      if (p.weeks !== undefined) {
+        d.setDate(d.getDate() + p.weeks * 7);
+        return d;
+      }
+    }
+  }
+
+  const currentDayOfWeek = today.getDay();
+  const saturday = 6;
+  const sunday = 0;
+
+  function getDaysUntilTargetDay(targetDay) {
+    return (targetDay - currentDayOfWeek + 7) % 7;
+  }
+
+  function getNextWeekTargetDay(targetDay) {
+    return ((targetDay - currentDayOfWeek + 7) % 7) + 7;
+  }
+
+  const weekendPatterns = [
+    { regex: /这周六[日]?|这周[六6][日]?|这个周末|本周末/i, isNextWeek: false, isSaturday: saturday },
+    { regex: /这周日|本周日|本周日/i, isNextWeek: false, isSaturday: sunday },
+    { regex: /下周六[日]?|下周[六6][日]?|下个周末|下周末/i, isNextWeek: true, isSaturday: saturday },
+    { regex: /下周日|下周周日/i, isNextWeek: true, isSaturday: sunday },
+    { regex: /周[六6]|星期六/i, isNextWeek: null, isSaturday: saturday },
+    { regex: /周[日0]|星期[日0]|周末(?!的)/i, isNextWeek: null, isSaturday: sunday },
+  ];
+
+  for (const p of weekendPatterns) {
+    if (p.regex.test(query)) {
+      const d = new Date(today);
+      let daysUntil;
+      if (p.isNextWeek === false) {
+        daysUntil = getDaysUntilTargetDay(p.isSaturday);
+      } else if (p.isNextWeek === true) {
+        daysUntil = getNextWeekTargetDay(p.isSaturday);
+      } else {
+        daysUntil = getDaysUntilTargetDay(p.isSaturday);
+        if (daysUntil === 0 && currentDayOfWeek !== p.isSaturday) {
+          daysUntil = 7;
+        }
+      }
+      d.setDate(d.getDate() + daysUntil);
       return d;
     }
   }
@@ -120,17 +233,21 @@ class WeatherSkill extends BaseSkill {
 
   async process(query, context = {}) {
     try {
-      const targetDate = parseWeatherDate(query);
+      console.log(`[WeatherSkill] 收到 context:`, JSON.stringify(context));
+      const originalQuery = context.originalQuery || query;
+      console.log(`[WeatherSkill] originalQuery: "${originalQuery}", query: "${query}"`);
+      const dateQuery = extractDateFromContext(originalQuery, query);
+      const targetDate = parseWeatherDate(dateQuery);
       const queryType = determineQueryType(targetDate);
       const now = new Date();
       console.log(`[WeatherSkill] 当前系统时间: ${now.toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' })}`);
-      console.log(`[WeatherSkill] 解析日期: ${targetDate ? targetDate.toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' }) : 'null'}, 查询类型: ${queryType}`);
+      console.log(`[WeatherSkill] 解析日期(${dateQuery !== query ? '使用提取的日期' : '使用当前查询'}): ${targetDate ? targetDate.toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' }) : 'null'}, 查询类型: ${queryType}`);
 
       let { latitude, longitude, cityName, country } = context.location || {};
 
       if (!latitude || !longitude) {
         console.log('[WeatherSkill] 上下文中没有位置信息，尝试从查询中提取地名并获取坐标');
-        const locationData = await this.extractLocationFromQuery(query);
+        const locationData = await this.extractLocationFromQuery(query, originalQuery);
         if (locationData) {
           latitude = locationData.latitude;
           longitude = locationData.longitude;
@@ -147,6 +264,8 @@ class WeatherSkill extends BaseSkill {
       }
 
       const weatherData = await this.getWeatherByCoords(latitude, longitude, cityName, country, targetDate);
+      weatherData.originalQuery = originalQuery;
+      weatherData.dateQuery = dateQuery;
       return {
         success: true,
         skill: this.name,
@@ -162,10 +281,60 @@ class WeatherSkill extends BaseSkill {
     }
   }
 
-  async extractLocationFromQuery(query) {
+  async extractLocationFromQuery(query, originalQuery = '') {
     const dateWords = ['今天', '明天', '后天', '大后天', '昨天', '前天', '上周', '下周', '本周'];
     const weatherWords = ['天气', '气温', '温度', '下雨', '晴天', '多云', '冷', '热', '刮风'];
     let cleanQuery = query;
+
+    if (originalQuery && originalQuery.includes('【对话上下文】')) {
+      const currentAnswerMatch = originalQuery.match(/当前回答[：:]\s*([^[\n]+)/i);
+      if (currentAnswerMatch) {
+        const currentAnswer = currentAnswerMatch[1].trim();
+        const answerPatterns = [
+          /^([\u4e00-\u9fa5]{2,10})$/,
+          /^([a-zA-Z\s]{2,20})$/
+        ];
+        for (const pattern of answerPatterns) {
+          if (pattern.test(currentAnswer)) {
+            console.log(`[WeatherSkill] 从当前回答中提取地名: ${currentAnswer}`);
+            return await this.geocodeLocation(currentAnswer);
+          }
+        }
+      }
+
+      const confirmedMatch = originalQuery.match(/答[：:]\s*([^\n]+)/i);
+      if (confirmedMatch) {
+        for (const match of confirmedMatch) {
+          const confirmedAnswer = match.trim();
+          const answerPatterns = [
+            /^([\u4e00-\u9fa5]{2,10})$/,
+            /^([a-zA-Z\s]{2,20})$/
+          ];
+          for (const pattern of answerPatterns) {
+            if (pattern.test(confirmedAnswer)) {
+              console.log(`[WeatherSkill] 从已确认信息中提取地名: ${confirmedAnswer}`);
+              return await this.geocodeLocation(confirmedAnswer);
+            }
+          }
+        }
+      }
+    }
+
+    const userAnswerMatch = cleanQuery.match(/用户回答[""'']([^""'']+)[""'']/);
+    if (userAnswerMatch && userAnswerMatch[1]) {
+      const answer = userAnswerMatch[1].trim();
+      const answerPatterns = [
+        /^([\u4e00-\u9fa5]{2,10})$/,
+        /^([a-zA-Z\s]{2,20})$/
+      ];
+      for (const pattern of answerPatterns) {
+        if (pattern.test(answer)) {
+          console.log(`[WeatherSkill] 从用户回答中提取地名: ${answer}`);
+          return await this.geocodeLocation(answer);
+        }
+      }
+    }
+
     for (const word of dateWords) {
       cleanQuery = cleanQuery.replace(new RegExp(word, 'g'), '');
     }
@@ -202,7 +371,7 @@ class WeatherSkill extends BaseSkill {
   async geocodeLocation(locationName) {
     try {
       const url = `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(locationName)}&count=5&language=zh&format=json`;
-      const response = await axios.get(url, { timeout: 10000 });
+      const response = await axios.get(url, { timeout: 30000 });
       const data = response.data;
 
       if (data.results && data.results.length > 0) {
@@ -236,13 +405,13 @@ class WeatherSkill extends BaseSkill {
 
     if (queryType === 'current') {
       const url = `https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}&current=temperature_2m,relative_humidity_2m,apparent_temperature,weather_code,wind_speed_10m,wind_direction_10m,is_day,uv_index&hourly=temperature_2m,weather_code,precipitation_probability&timezone=Asia%2FShanghai&forecast_days=1`;
-      const response = await axios.get(url, { timeout: 10000 });
+      const response = await axios.get(url, { timeout: 30000 });
       data = response.data;
       dateStr = formatChineseDate(today);
     } else if (queryType === 'forecast') {
       const daysAhead = getDaysDifference(today, targetDate);
       const url = `https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}&daily=weather_code,temperature_2m_max,temperature_2m_min,uv_index_max,precipitation_probability_max,sunrise,sunset&hourly=temperature_2m,precipitation_probability&timezone=Asia%2FShanghai&forecast_days=${Math.min(daysAhead + 1, 16)}`;
-      const response = await axios.get(url, { timeout: 10000 });
+      const response = await axios.get(url, { timeout: 30000 });
       data = response.data;
       dateStr = formatChineseDate(targetDate);
 
@@ -283,7 +452,7 @@ class WeatherSkill extends BaseSkill {
       };
     } else {
       const url = `https://archive-api.open-meteo.com/v1/archive?latitude=${latitude}&longitude=${longitude}&start_date=${formatDate(targetDate)}&end_date=${formatDate(targetDate)}&hourly=temperature_2m,relative_humidity_2m,weather_code,wind_speed_10m,wind_direction_10m,visibility,uv_index&daily=sunrise,sunset&timezone=Asia%2FShanghai`;
-      const response = await axios.get(url, { timeout: 10000 });
+      const response = await axios.get(url, { timeout: 30000 });
       data = response.data;
       dateStr = formatChineseDate(targetDate);
     }
@@ -358,15 +527,15 @@ class WeatherSkill extends BaseSkill {
   }
 
   formatWeatherText(data) {
-    const { city, current, forecast, queryType, date } = data;
+    const { city, current, forecast, queryType, date, dateQuery } = data;
 
     let timePrefix = '';
     if (queryType === 'historical') {
-      timePrefix = `${date}的天气是`;
+      timePrefix = dateQuery ? `${dateQuery}的天气是` : `${date}的天气是`;
     } else if (queryType === 'forecast') {
-      timePrefix = `${date}的天气预计是`;
+      timePrefix = dateQuery ? `${dateQuery}${date}的天气预计是` : `${date}的天气预计是`;
     } else {
-      timePrefix = `今天的天气是`;
+      timePrefix = dateQuery ? `今天是${dateQuery}，` : '今天的天气是';
     }
 
     let text = `${city}${timePrefix}${current.weatherDesc}，气温${current.temp_C}°C`;

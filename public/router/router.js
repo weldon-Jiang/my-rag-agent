@@ -15,6 +15,83 @@ const routes = {
  * 页面缓存，避免重复加载
  */
 const pageCache = {};
+const htmlCache = {};
+
+/**
+ * 加载页面 HTML
+ * @param {string} pageName - 页面名称
+ * @returns {Promise<string>} 页面 HTML
+ */
+async function loadPageHTML(pageName) {
+  if (htmlCache[pageName]) {
+    return htmlCache[pageName];
+  }
+
+  try {
+    const response = await fetch(`./pages/${pageName}/${pageName}.html`);
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}`);
+    }
+    const html = await response.text();
+    htmlCache[pageName] = html;
+    console.log(`[Router] 页面加载成功: ${pageName}`);
+    return html;
+  } catch (error) {
+    console.error(`[Router] 页面加载失败: ${pageName}`, error);
+    return '';
+  }
+}
+
+/**
+ * 加载组件 HTML
+ * @param {string} componentPath - 组件路径 (相对于 public/)
+ * @returns {Promise<string>} 组件 HTML
+ */
+async function loadComponentHTML(componentPath) {
+  const cacheKey = componentPath;
+  if (htmlCache[cacheKey]) {
+    return htmlCache[cacheKey];
+  }
+
+  try {
+    const response = await fetch(`./${componentPath}`);
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}`);
+    }
+    const html = await response.text();
+    htmlCache[cacheKey] = html;
+    console.log(`[Router] 组件加载成功: ${componentPath}`);
+    return html;
+  } catch (error) {
+    console.error(`[Router] 组件加载失败: ${componentPath}`, error);
+    return '';
+  }
+}
+
+/**
+ * 批量加载所有页面 HTML
+ * @returns {Promise<void>}
+ */
+async function loadAllPagesHTML() {
+  const pageNames = ['chat', 'knowledge', 'skill-tools', 'models'];
+  const htmls = await Promise.all(pageNames.map(name => loadPageHTML(name)));
+  const container = document.getElementById('pageContainer');
+  if (container) {
+    container.innerHTML = htmls.join('');
+  }
+}
+
+/**
+ * 加载所有组件
+ * @returns {Promise<void>}
+ */
+async function loadAllComponents() {
+  const modalHTML = await loadComponentHTML('components/modal/model-modal.html');
+  const container = document.getElementById('modalContainer');
+  if (container && modalHTML) {
+    container.innerHTML = modalHTML;
+  }
+}
 
 /**
  * 导航到指定页面
@@ -50,6 +127,11 @@ async function navigateTo(page, forceReload = false) {
     } catch (e) {
       console.error(`[Router] 页面初始化失败: ${page}`, e);
     }
+  }
+
+  // 页面特定逻辑
+  if (page === 'chat' && window.loadSessionMessages) {
+    window.loadSessionMessages(window.currentSessionId);
   }
 }
 
@@ -102,10 +184,31 @@ async function loadPageModule(page, forceReload = false) {
   }
 
   try {
-    // 动态导入模块
-    const module = await import(modulePath + '?t=' + Date.now());
+    let importPath = modulePath;
+    if (window.electronAPI && window.electronAPI.basePath) {
+      const base = window.electronAPI.basePath.replace(/\\/g, '/').replace(/\/$/, '');
+      const mod = modulePath.startsWith('/') ? modulePath : '/' + modulePath;
+      importPath = 'file://' + base + mod;
+    }
+    console.log(`[Router] 正在加载页面模块: ${page}, 路径: ${importPath}`);
+    const module = await import(importPath + '?t=' + Date.now());
+
+    const pageIdMap = {
+      'skill-tools': 'skillToolsPage',
+      'knowledge': 'knowledgePage',
+      'models': 'modelsPage',
+      'chat': 'chatPage'
+    };
+    const windowKey = pageIdMap[page] || `${page}Page`;
+
+    if (!module.default || Object.keys(module).length === 0) {
+      if (window[windowKey]) {
+        pageCache[page] = window[windowKey];
+        return pageCache[page];
+      }
+    }
+
     pageCache[page] = module;
-    console.log(`[Router] 页面模块加载成功: ${page}`);
     return module;
   } catch (error) {
     console.error(`[Router] 页面模块加载失败: ${page}`, error);
@@ -150,5 +253,11 @@ window.router = {
   registerPage,
   getPage,
   clearCache,
-  routes
+  loadPageHTML,
+  loadComponentHTML,
+  loadAllPagesHTML,
+  loadAllComponents,
+  routes,
+  htmlCache,
+  pageCache
 };

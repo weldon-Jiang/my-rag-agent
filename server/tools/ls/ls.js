@@ -3,13 +3,13 @@ const executor = require('../executor');
 async function execute(args, context = {}) {
   const { path: dirPath, description = '' } = args;
 
-  console.log(`[ls tool] Listing directory: ${dirPath}`);
+  console.log(`[工具] ls: ${dirPath}`);
 
   try {
     const result = executor.listDirectory(dirPath);
     return result;
   } catch (error) {
-    console.error(`[ls tool] Error: ${error.message}`);
+    console.error(`[工具] ls 错误: ${error.message}`);
     return { success: false, error: error.message };
   }
 }

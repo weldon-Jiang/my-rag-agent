@@ -11,7 +11,6 @@ let currentTab = 'skills';
  * 页面初始化函数
  */
 function init() {
-  console.log('[SkillTools] 技能工具页面初始化');
   setupTabListeners();
   loadData();
 }
@@ -62,29 +61,36 @@ async function loadData() {
 
 /**
  * 渲染技能列表
- * @param {Object} skillsByCategory - 按分类的技能
+ * @param {Array} skillsByCategory - 按分类的技能数组
  */
 function renderSkills(skillsByCategory) {
   const skillsList = document.getElementById('skillsList');
   if (!skillsList) return;
 
-  if (!skillsByCategory || Object.keys(skillsByCategory).length === 0) {
+  if (!skillsByCategory || !Array.isArray(skillsByCategory) || skillsByCategory.length === 0) {
     skillsList.innerHTML = '<div class="empty-message">暂无技能数据</div>';
     return;
   }
 
   let html = '';
 
-  const categoryNames = {
-    'file_processing': '📦 文件处理',
-    'info_query': '🔍 信息查询'
-  };
-
-  for (const [category, skills] of Object.entries(skillsByCategory)) {
-    html += `<div class="doc-category"><span class="category-label">${categoryNames[category] || category}</span></div>`;
+  for (const category of skillsByCategory) {
+    if (!category || typeof category !== 'object') continue;
+    const name = category.name || '未分类';
+    const icon = category.icon || '📋';
+    html += `<div class="doc-category"><span class="category-label">${icon} ${escapeHtml(name)}</span></div>`;
     html += '<div class="doc-items">';
 
+    let skills = category.skills;
+    if (!Array.isArray(skills)) {
+      if (typeof skills === 'object' && skills !== null) {
+        skills = Object.values(skills);
+      } else {
+        skills = [];
+      }
+    }
     for (const skill of skills) {
+      if (!skill || typeof skill !== 'object') continue;
       const triggerText = Array.isArray(skill.trigger) ? skill.trigger.join(', ') : (skill.trigger || '自动触发');
       const usageText = skill.usage || '';
       const toolsText = Array.isArray(skill.tools) ? skill.tools.join(', ') : '';
@@ -114,7 +120,9 @@ function renderTools(toolsWithDescriptions) {
   const toolsList = document.getElementById('toolsList');
   if (!toolsList) return;
 
-  if (!toolsWithDescriptions || toolsWithDescriptions.length === 0) {
+  console.log('[SkillTools] toolsWithDescriptions:', toolsWithDescriptions);
+
+  if (!toolsWithDescriptions || !Array.isArray(toolsWithDescriptions) || toolsWithDescriptions.length === 0) {
     toolsList.innerHTML = '<div class="empty-message">暂无工具数据</div>';
     return;
   }
@@ -122,11 +130,21 @@ function renderTools(toolsWithDescriptions) {
   let html = '';
 
   for (const group of toolsWithDescriptions) {
-    html += `<div class="doc-category"><span class="category-label">${escapeHtml(group.category || '')}</span></div>`;
+    if (!group || typeof group !== 'object') continue;
+    html += `<div class="doc-category"><span class="category-label">${escapeHtml(group.category || '未分类')}</span></div>`;
     html += '<div class="doc-items">';
 
-    for (const tool of group.tools || []) {
-      const triggerText = tool.trigger || '';
+    let tools = group.tools;
+    if (!Array.isArray(tools)) {
+      if (typeof tools === 'object' && tools !== null) {
+        tools = Object.values(tools);
+      } else {
+        tools = [];
+      }
+    }
+    for (const tool of tools) {
+      if (!tool || typeof tool !== 'object') continue;
+      const triggerText = Array.isArray(tool.trigger) ? tool.trigger.join(', ') : (tool.trigger || '');
       const usageText = tool.usage || '';
 
       html += `
@@ -164,5 +182,7 @@ function escapeHtml(str) {
 window.skillToolsPage = {
   init,
   switchTab,
-  loadData
+  loadData,
+  renderSkills,
+  renderTools
 };

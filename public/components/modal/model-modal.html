@@ -1,0 +1,52 @@
+<div id="modelModal" class="modal">
+    <div class="modal-content">
+        <span class="modal-close">&times;</span>
+        <h3 id="modelModalTitle">新增模型</h3>
+        <div class="form-group">
+            <label for="modalModelName">模型名称</label>
+            <input type="text" id="modalModelName" placeholder="请输入模型名称">
+        </div>
+        <div class="form-group">
+            <label for="modalModelId">模型ID (modelId)</label>
+            <input type="text" id="modalModelId" placeholder="请输入模型ID，如: deepseek-ai/DeepSeek-R1">
+        </div>
+        <div class="form-group">
+            <label for="modalModelType">模型类型</label>
+            <select id="modalModelType">
+                <option value="chat" selected>对话(Chat)</option>
+                <option value="embedding">嵌入(Embedding)</option>
+                <option value="其他">其他</option>
+            </select>
+        </div>
+        <div class="form-group">
+            <label for="modalModelProtocol">通信协议</label>
+            <select id="modalModelProtocol">
+                <option value="openai" selected>OpenAI兼容</option>
+                <option value="anthropic">Anthropic</option>
+                <option value="minimax">MiniMax</option>
+            </select>
+        </div>
+        <div class="form-group">
+            <label for="modalModelUrl">API URL</label>
+            <input type="text" id="modalModelUrl" placeholder="请输入API URL，如: https://api.siliconflow.cn/v1">
+        </div>
+        <div class="form-group">
+            <label for="modalModelKey">API密钥</label>
+            <input type="text" id="modalModelKey" placeholder="请输入API密钥">
+        </div>
+        <div class="form-group">
+            <label for="modalModelProvider">供应商</label>
+            <input type="text" id="modalModelProvider" placeholder="请输入供应商，如: 硅基流动">
+        </div>
+        <div class="form-group">
+            <label for="modalModelPublished">
+                <input type="checkbox" id="modalModelPublished" checked>
+                发布状态（勾选后可在对话中使用）
+            </label>
+        </div>
+        <div class="modal-buttons">
+            <button id="saveModelBtn" class="save-btn">保存</button>
+            <button id="cancelModelBtn" class="cancel-btn">取消</button>
+        </div>
+    </div>
+</div>

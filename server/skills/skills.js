@@ -1,4 +1,4 @@
-﻿const path = require('path');
+const path = require('path');
 const fs = require('fs');
 const SkillsManager = require('./skills-manager');
 const skillsManifest = require('./skills-manifest');
@@ -6,6 +6,7 @@ const skillsManifest = require('./skills-manifest');
 const BaseSkill = require('./base-skill');
 const { askClarification } = require('../clarification');
 const sandbox = require('../tools/tools');
+const toolsManager = require('../tools/tools-manager');
 
 const KNOWLEDGE_DIR = path.join(__dirname, '../../knowledge');
 
@@ -20,6 +21,67 @@ function initializeSkills() {
 }
 
 initializeSkills();
+
+/**
+ * 能力类型到工具名称的映射
+ */
+const CAPABILITY_TOOLS = {
+  'knowledge_search': ['search_knowledge_base'],
+  'web_search': ['web_search'],
+  'weather_query': ['get_weather'],
+  'location_query': ['get_location'],
+  'file_read': ['read_file'],
+  'file_write': ['write_file'],
+  'file_edit': ['str_replace'],
+  'code_execute': ['python'],
+  'command_execute': ['bash'],
+  'image_understand': ['recognize_image'],
+  'document_understand': ['extract_pdf_text'],
+  'data_process': ['python', 'bash']
+};
+
+/**
+ * 根据能力类型匹配工具
+ * @param {Array<string>} capabilities - 能力类型数组
+ * @returns {Array<string>} 工具名称数组
+ */
+function matchToolsByCapability(capabilities) {
+  const matchedTools = new Set();
+  if (!capabilities || !Array.isArray(capabilities)) return [];
+
+  for (const capability of capabilities) {
+    const tools = CAPABILITY_TOOLS[capability];
+    if (tools) {
+      tools.forEach(t => matchedTools.add(t));
+    }
+  }
+
+  return Array.from(matchedTools);
+}
+
+/**
+ * 根据查询匹配工具（触发词匹配）
+ * @param {string} query - 用户查询
+ * @returns {Array} 工具名称数组
+ */
+function matchTools(query) {
+  const matchedTools = [];
+  const manifest = toolsManager.manifest;
+
+  for (const [toolName, config] of manifest.entries()) {
+    const triggers = config.trigger || [];
+    for (const trigger of triggers) {
+      if (query.toLowerCase().includes(trigger.toLowerCase())) {
+        if (!matchedTools.includes(toolName)) {
+          matchedTools.push(toolName);
+        }
+        break;
+      }
+    }
+  }
+
+  return matchedTools;
+}
 
 const intentKeywords = {
   image: ['图片', '图像', '照片', '截图', 'ocr', '识别文字', '图片内容', '照片里'],
@@ -237,25 +299,12 @@ const toolDefinitions = [
   },
 ];
 
-function analyzeIntent(query) {
-  const lowerQuery = query.toLowerCase();
-  for (const [type, keywords] of Object.entries(intentKeywords)) {
-    for (const keyword of keywords) {
-      if (lowerQuery.includes(keyword)) {
-        return type;
-      }
-    }
-  }
-  return 'text';
-}
-
 function getRelevantFiles(query, fileTypes = 'all') {
   try {
     if (!fs.existsSync(KNOWLEDGE_DIR)) {
       return [];
     }
     const files = fs.readdirSync(KNOWLEDGE_DIR);
-    const intent = analyzeIntent(query);
 
     let targetTypes = ['text', 'image', 'pdf', 'video'];
     if (fileTypes !== 'all' && Array.isArray(fileTypes)) {
@@ -280,14 +329,70 @@ function getRelevantFiles(query, fileTypes = 'all') {
       });
     }
 
-    return files.filter(filename => {
+    const candidateFiles = files.filter(filename => {
       const ext = path.extname(filename).toLowerCase();
       return allowedExtensions.includes(ext);
     });
+
+    const textExtensions = typeToExtensions.text;
+    const scoredFiles = [];
+
+    for (const filename of candidateFiles) {
+      const ext = path.extname(filename).toLowerCase();
+      if (textExtensions.includes(ext)) {
+        const filepath = path.join(KNOWLEDGE_DIR, filename);
+        try {
+          const content = fs.readFileSync(filepath, 'utf-8');
+          const score = calculateRelevanceScore(query, content, filename);
+          if (score > 0) {
+            scoredFiles.push({ filename, score, content });
+          }
+        } catch (err) {
+          console.error(`[Knowledge] 读取文件失败: ${filename}`, err.message);
+        }
+      } else {
+        scoredFiles.push({ filename, score: 0.3, content: '' });
+      }
+    }
+
+    scoredFiles.sort((a, b) => b.score - a.score);
+
+    console.log(`[Knowledge] 搜索"${query}": 找到 ${scoredFiles.length} 个相关文件`);
+
+    return scoredFiles.map(f => f.filename);
   } catch (error) {
     console.error('获取相关文件失败:', error);
     return [];
   }
+}
+
+function calculateRelevanceScore(query, content, filename) {
+  const queryLower = query.toLowerCase();
+  const contentLower = content.toLowerCase();
+  const words = queryLower.split(/[\s,.，。！？、]+/).filter(w => w.length > 1);
+
+  let score = 0;
+
+  if (filename.toLowerCase().includes(queryLower)) {
+    score += 0.4;
+  }
+
+  for (const word of words) {
+    if (contentLower.includes(word)) {
+      const regex = new RegExp(word, 'gi');
+      const matches = contentLower.match(regex);
+      score += 0.15 * (matches ? matches.length : 1);
+    }
+  }
+
+  const queryPhrases = queryLower.split(/[,，.。!！?？]/).filter(p => p.trim().length > 3);
+  for (const phrase of queryPhrases) {
+    if (contentLower.includes(phrase.trim())) {
+      score += 0.3;
+    }
+  }
+
+  return Math.min(score, 1.0);
 }
 
 async function processFile(file, context = {}) {
@@ -371,22 +476,75 @@ async function executeTool(toolName, args, context = {}) {
 
 module.exports = {
   skillsManager,
+  get: (name) => skillsManager.get(name),
+  getSkill: (name) => skillsManager.get(name),
   toolDefinitions,
-  analyzeIntent,
   getRelevantFiles,
   processFile,
   executeTool,
   getAllSkills: () => skillsManager.getAll(),
-  getSkillsByCategory: () => ({
-    file_processing: skillsManager.getAll().filter(s => s.supportedTypes && s.supportedTypes.length > 0),
-    info_query: skillsManager.getAll().filter(s => s.name.includes('weather') || s.name.includes('location') || s.name.includes('web-search'))
-  }),
-  getToolsWithDescriptions: () => [
-    { category: '代码执行', tools: [{ name: 'bash', description: '执行 Shell 命令' }, { name: 'python', description: '执行 Python 代码' }] },
-    { category: '文件操作', tools: [{ name: 'ls', description: '列出目录内容' }, { name: 'read_file', description: '读取文件内容' }, { name: 'write_file', description: '写入文件内容' }, { name: 'str_replace', description: '替换文件中的字符串' }] },
-    { category: '辅助功能', tools: [{ name: 'ask_clarification', description: '请求用户澄清信息' }] }
-  ],
+  getSkillsByCategory: () => {
+    const allSkills = skillsManager.getAll();
+    const categoryMap = {
+      '系统技能': { name: '系统技能', icon: '⚙️', skills: [] },
+      '文件处理': { name: '文件处理', icon: '📦', skills: [] },
+      '信息查询': { name: '信息查询', icon: '🔍', skills: [] },
+      '用户交互': { name: '用户交互', icon: '💬', skills: [] },
+      '系统操作': { name: '系统操作', icon: '🖥️', skills: [] }
+    };
+
+    for (const skill of allSkills) {
+      let categorized = false;
+      if (skill.name.includes('intent') || skill.name.includes('context') ||
+          skill.name.includes('preprocessor') || skill.name.includes('memory') || skill.name.includes('nlu')) {
+        categoryMap['系统技能'].skills.push(skill);
+        categorized = true;
+      }
+      if (skill.supportedTypes && skill.supportedTypes.length > 0) {
+        categoryMap['文件处理'].skills.push(skill);
+        categorized = true;
+      }
+      if (skill.name.includes('weather') || skill.name.includes('location') || skill.name.includes('web-search')) {
+        categoryMap['信息查询'].skills.push(skill);
+        categorized = true;
+      }
+      if (skill.name.includes('user-profile') || skill.name.includes('command') ||
+          skill.name.includes('fashion') || skill.name.includes('activity')) {
+        categoryMap['用户交互'].skills.push(skill);
+        categorized = true;
+      }
+      if (skill.name.includes('windows-system')) {
+        categoryMap['系统操作'].skills.push(skill);
+        categorized = true;
+      }
+      if (!categorized) {
+        categoryMap['用户交互'].skills.push(skill);
+      }
+    }
+
+    return Object.values(categoryMap).filter(c => c.skills.length > 0);
+  },
+  getToolsByCategory: () => {
+    return toolsManager.getToolsWithFullDescriptions();
+  },
+  getSupportedExtensions: () => {
+    const extensions = new Set();
+    skillsManager.getAll().forEach(skill => {
+      if (skill.supportedTypes) {
+        skill.supportedTypes.forEach(ext => extensions.add(ext));
+      }
+    });
+    return Array.from(extensions);
+  },
+  getToolsWithDescriptions: () => toolsManager.getToolsWithFullDescriptions(),
   getToolDefinitions: () => toolDefinitions,
-  getToolDefinition: (name) => toolDefinitions.find(t => t.function.name === name)
+  getToolDefinition: (name) => toolDefinitions.find(t => t.function.name === name),
+  getSkillMarkdown: (name) => skillsManager.loadSkillMarkdown(name),
+  parseSkillMarkdown: (content) => skillsManager.parseSkillMarkdown(content),
+  getSkillSummary: (name) => skillsManager.getSkillSummary(name),
+  getFullSkillContent: (name) => skillsManager.getFullSkillContent(name),
+  getAllSkillSummaries: () => skillsManager.getAllSkillSummaries(),
+  matchTools,
+  matchToolsByCapability
 };
 

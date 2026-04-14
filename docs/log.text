@@ -1,0 +1,284 @@
+========== 开始处理用户消息 ==========
+[用户输入]: 明天天气怎么样
+[使用模型]: MiniMax-M2.5
+[对话模式]: hybrid
+
+========== 意图分析 ==========
+[Intent] 用户Query: 明天天气怎么样
+[Intent] 对话模式: hybrid
+[Intent] 使用LLM进行意图分析...
+[AI Service] 模型配置 - protocol: minimax baseURL: http://1811081066449577.cn-beijing.pai-eas.aliyuncs.com/api/predict/ctgii_mm25/v1 modelId: MiniMax-M2.5    
+[AI Service] 调用 URL: http://1811081066449577.cn-beijing.pai-eas.aliyuncs.com/api/predict/ctgii_mm25/v1/chat/completions
+[Intent] ✓ LLM分析成功
+[Intent]   - 意图: weather_query
+[Intent]   - 意图描述: 查询明天天气预报
+[Intent]   - 置信度: 0.7
+[Intent]   - 需要追问: true
+[Intent]   - 所需能力: weather_query
+[Intent]   - 任务拆解: 确认查询城市 → 查询该城市明天天气 → 返回天气信息
+[Intent]   - Token消耗: 1021 tokens
+[Intent] ⚠️ 需要追问
+[AI Service] 模型配置 - protocol: minimax baseURL: http://1811081066449577.cn-beijing.pai-eas.aliyuncs.com/api/predict/ctgii_mm25/v1 modelId: MiniMax-M2.5    
+[AI Service] 调用 URL: http://1811081066449577.cn-beijing.pai-eas.aliyuncs.com/api/predict/ctgii_mm25/v1/chat/completions
+[Intent]   - 追问问题: 你想查询哪个城市的天气呢？
+[Intent]   - 追问选项: 北京, 上海, 广州, 深圳, 杭州, 其他
+[渐进式披露] 保存追问: id=clarification_1776069014313_atpo9wy76, question=你想查询哪个城市的天气呢？...
+[Intent] Token消耗:意图分析 1021 tokens
+
+========== 追问 ==========
+[Clarification] 问题: 你想查询哪个城市的天气呢？
+[Clarification] 选项: 北京, 上海, 广州, 深圳, 杭州, 其他
+==============================
+
+========== 消息处理完成 ==========
+[ChatController] 接收到的请求体 - modelId: minimax-m2.5 mode: hybrid clarification_id: clarification_1776069014313_atpo9wy76
+[ChatController] getModel 结果: minimax-m2.5, protocol:minimax
+[ChatController] 检测到追问响应，调用 processClarificationResponse
+[Clarification] processClarificationResponse 参数: {
+  clarificationId: 'clarification_1776069014313_atpo9wy76',
+  userResponse: '深圳',
+  originalQuery: '明天天气怎么样',
+  sessionId: 'session_1776068954476',
+  mode: 'hybrid'
+}
+[渐进式披露] 收到响应: id=clarification_1776069014313_atpo9wy76, response=深圳...
+[Clarification] 组合查询: 明天天气怎么样 深圳
+[Clarification] 用户响应: 深圳
+[Clarification] 组合后查询: 明天天气怎么样 深圳
+[ChatController] 组合后查询: 明天天气怎么样 深圳
+========== 开始处理用户消息 ==========
+[用户输入]: 明天天气怎么样 深圳
+[使用模型]: MiniMax-M2.5
+[对话模式]: hybrid
+
+========== 意图分析 ==========
+[Intent] 用户Query: 明天天气怎么样 深圳
+[Intent] 对话模式: hybrid
+[Intent] 使用LLM进行意图分析...
+[AI Service] 模型配置 - protocol: minimax baseURL: http://1811081066449577.cn-beijing.pai-eas.aliyuncs.com/api/predict/ctgii_mm25/v1 modelId: MiniMax-M2.5
+[AI Service] 调用 URL: http://1811081066449577.cn-beijing.pai-eas.aliyuncs.com/api/predict/ctgii_mm25/v1/chat/completions
+[Intent] ✓ LLM分析成功
+[Intent]   - 意图: weather_query
+[Intent]   - 意图描述: 查询深圳明天天气
+[Intent]   - 置信度: 1
+[Intent]   - 需要追问: false
+[Intent]   - 所需能力: weather_query
+[Intent]   - 任务拆解: 查询深圳明天天气数据 → 返回天气信息
+[Intent]   - Token消耗: 933 tokens
+[Intent] ✓ 无需追问，继续处理
+[Intent] Token消耗:意图分析 933 tokens
+
+========== 工具匹配 ==========
+[Tool] 意图: weather_query
+[Tool] 用户Query: 明天天气怎么样 深圳
+[Tool] 对话模式: hybrid
+[Tool] LLM返回的能力需求: weather_query
+[Tool] ✓ 能力匹配结果: get_weather
+[Tool] 最终选择的工具: get_weather
+==============================
+[ChatService] 意图来源: llm
+[ChatService] 选择的工具: [ 'get_weather' ]
+[ChatService] 对话模式: hybrid
+[ChatService] Hybrid模式：执行工具...
+[Tools Executor] 开始执行 1 个工具
+[Tool Executor] 处理工具: get_weather
+[extractDateFromContext] 未匹配到任何日期词，当前查询: "深圳"
+[WeatherSkill] 当前系统时间: 2026/4/13 16:30:28
+[WeatherSkill] 解析日期(使用当前查询): null, 查询类型: current
+[WeatherSkill] 上下文中没有位置信息，尝试从查询中提取地名并获取坐标
+[WeatherSkill] 从查询中提取到地名: 深圳
+[WeatherSkill] 地理编码成功: 深圳 (22.54554, 114.0683)
+[WeatherSkill] 获取天气失败: <ref *1> AxiosError: timeout of 10000ms exceeded
+    at RedirectableRequest.handleRequestTimeout (D:\chinatravel\my-rag-agent\node_modules\axios\dist\node\axios.cjs:3836:13)
+    at RedirectableRequest.emit (node:events:507:28)
+    at Timeout._onTimeout (D:\chinatravel\my-rag-agent\node_modules\follow-redirects\index.js:221:12)
+    at listOnTimeout (node:internal/timers:608:17)
+    at process.processTimers (node:internal/timers:543:7)
+    at Axios.request (D:\chinatravel\my-rag-agent\node_modules\axios\dist\node\axios.cjs:5110:41)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async WeatherSkill.getWeatherByCoords (D:\chinatravel\my-rag-agent\server\skills\weather\weather-skill.js:395:24)
+    at async WeatherSkill.process (D:\chinatravel\my-rag-agent\server\skills\weather\weather-skill.js:255:27)
+    at async Object.executeTool (D:\chinatravel\my-rag-agent\server\skills\skills.js:442:16)
+    at async executeSingleTool (D:\chinatravel\my-rag-agent\server\services\chat-service.js:613:20)
+    at async Promise.all (index 0)
+    at async executeTools (D:\chinatravel\my-rag-agent\server\services\chat-service.js:663:19)
+    at async Object.processChatMessage (D:\chinatravel\my-rag-agent\server\services\chat-service.js:1074:21)
+    at async D:\chinatravel\my-rag-agent\server\controllers\chat-controller.js:83:20 {
+  isAxiosError: true,
+  code: 'ECONNABORTED',
+  config: {
+    transitional: {
+      silentJSONParsing: true,
+      forcedJSONParsing: true,
+      clarifyTimeoutError: false,
+      legacyInterceptorReqResOrdering: true
+    },
+    adapter: [ 'xhr', 'http', 'fetch' ],
+    transformRequest: [ [Function: transformRequest] ],
+    transformResponse: [ [Function: transformResponse] ],
+    timeout: 10000,
+    xsrfCookieName: 'XSRF-TOKEN',
+    xsrfHeaderName: 'X-XSRF-TOKEN',
+    maxContentLength: -1,
+    maxBodyLength: -1,
+    env: { FormData: [Function], Blob: [class Blob] },
+    validateStatus: [Function: validateStatus],
+    headers: Object [AxiosHeaders] {
+      Accept: 'application/json, text/plain, */*',
+      'Content-Type': undefined,
+      'User-Agent': 'axios/1.13.6',
+      'Accept-Encoding': 'gzip, compress, deflate, br'
+    },
+    method: 'get',
+    url: 'https://api.open-meteo.com/v1/forecast?latitude=22.54554&longitude=114.0683&current=temperature_2m,relative_humidity_2m,apparent_temperature,weather_code,wind_speed_10m,wind_direction_10m,is_day,uv_index&hourly=temperature_2m,weather_code,precipitation_probability&timezone=Asia%2FShanghai&forecast_days=1',
+    allowAbsoluteUrls: true,
+    data: undefined
+  },
+  request: <ref *2> Writable {
+    _events: {
+      close: undefined,
+      error: [Function: handleRequestError],
+      prefinish: undefined,
+      finish: undefined,
+      drain: undefined,
+      response: [Function: handleResponse],
+      socket: [Array],
+      timeout: undefined,
+      abort: undefined
+    },
+    _writableState: WritableState {
+      highWaterMark: 16384,
+      length: 0,
+      corked: 0,
+      onwrite: [Function: bound onwrite],
+      writelen: 0,
+      bufferedIndex: 0,
+      pendingcb: 0,
+      Symbol(kState): 17581054,
+      Symbol(kBufferedValue): null,
+      Symbol(kErroredValue): [Circular *1]
+    },
+    _maxListeners: undefined,
+    _options: {
+      maxRedirects: 21,
+      maxBodyLength: Infinity,
+      protocol: 'https:',
+      path: '/v1/forecast?latitude=22.54554&longitude=114.0683&current=temperature_2m,relative_humidity_2m,apparent_temperature,weather_code,wind_speed_10m,wind_direction_10m,is_day,uv_index&hourly=temperature_2m,weather_code,precipitation_probability&timezone=Asia%2FShanghai&forecast_days=1',
+      method: 'GET',
+      headers: [Object: null prototype],
+      agents: [Object],
+      auth: undefined,
+      family: undefined,
+      beforeRedirect: [Function: dispatchBeforeRedirect],
+      beforeRedirects: [Object],
+      http2Options: undefined,
+      hostname: 'api.open-meteo.com',
+      port: '',
+      agent: undefined,
+      nativeProtocols: [Object],
+      pathname: '/v1/forecast',
+      search: '?latitude=22.54554&longitude=114.0683&current=temperature_2m,relative_humidity_2m,apparent_temperature,weather_code,wind_speed_10m,wind_direction_10m,is_day,uv_index&hourly=temperature_2m,weather_code,precipitation_probability&timezone=Asia%2FShanghai&forecast_days=1'
+    },
+    _ended: true,
+    _ending: true,
+    _redirectCount: 0,
+    _redirects: [],
+    _requestBodyLength: 0,
+    _requestBodyBuffers: [],
+    _eventsCount: 3,
+    _onNativeResponse: [Function (anonymous)],
+    _currentRequest: ClientRequest {
+      _events: [Object: null prototype],
+      _eventsCount: 2,
+      _maxListeners: undefined,
+      outputData: [],
+      outputSize: 0,
+      writable: true,
+      destroyed: true,
+      _last: true,
+      chunkedEncoding: false,
+      shouldKeepAlive: true,
+      maxRequestsOnConnectionReached: false,
+      _defaultKeepAlive: true,
+      useChunkedEncodingByDefault: false,
+      sendDate: false,
+      _removedConnection: false,
+      _removedContLen: false,
+      _removedTE: false,
+      strictContentLength: false,
+      _contentLength: 0,
+      _hasBody: true,
+      _trailer: '',
+      finished: true,
+      _headerSent: true,
+      _closed: false,
+      _header: 'GET /v1/forecast?latitude=22.54554&longitude=114.0683&current=temperature_2m,relative_humidity_2m,apparent_temperature,weather_code,wind_speed_10m,wind_direction_10m,is_day,uv_index&hourly=temperature_2m,weather_code,precipitation_probability&timezone=Asia%2FShanghai&forecast_days=1 HTTP/1.1\r\n' + 
+        'Accept: application/json, text/plain, */*\r\n' +
+        'User-Agent: axios/1.13.6\r\n' +
+        'Accept-Encoding: gzip, compress, deflate, br\r\n' +
+        'Host: api.open-meteo.com\r\n' +
+        'Connection: keep-alive\r\n' +
+        '\r\n',
+      _keepAliveTimeout: 0,
+      _onPendingData: [Function: nop],
+      agent: [Agent],
+      socketPath: undefined,
+      method: 'GET',
+      maxHeaderSize: undefined,
+      insecureHTTPParser: undefined,
+      joinDuplicateHeaders: undefined,
+      path: '/v1/forecast?latitude=22.54554&longitude=114.0683&current=temperature_2m,relative_humidity_2m,apparent_temperature,weather_code,wind_speed_10m,wind_direction_10m,is_day,uv_index&hourly=temperature_2m,weather_code,precipitation_probability&timezone=Asia%2FShanghai&forecast_days=1',
+      _ended: false,
+      res: null,
+      aborted: false,
+      timeoutCb: [Function: emitRequestTimeout],
+      upgradeOrConnect: false,
+      parser: null,
+      maxHeadersCount: null,
+      reusedSocket: false,
+      host: 'api.open-meteo.com',
+      protocol: 'https:',
+      _redirectable: [Circular *2],
+      Symbol(shapeMode): false,
+      Symbol(kCapture): false,
+      Symbol(kBytesWritten): 0,
+      Symbol(kNeedDrain): false,
+      Symbol(corked): 0,
+      Symbol(kChunkedBuffer): [],
+      Symbol(kChunkedLength): 0,
+      Symbol(kSocket): [TLSSocket],
+      Symbol(kOutHeaders): [Object: null prototype],
+      Symbol(errored): null,
+      Symbol(kHighWaterMark): 16384,
+      Symbol(kRejectNonStandardBodyWrites): false,
+      Symbol(kUniqueHeaders): null,
+      Symbol(kError): [Circular *1]
+    },
+    _currentUrl: 'https://api.open-meteo.com/v1/forecast?latitude=22.54554&longitude=114.0683&current=temperature_2m,relative_humidity_2m,apparent_temperature,weather_code,wind_speed_10m,wind_direction_10m,is_day,uv_index&hourly=temperature_2m,weather_code,precipitation_probability&timezone=Asia%2FShanghai&forecast_days=1',
+    _timeout: null,
+    Symbol(shapeMode): true,
+    Symbol(kCapture): false
+  }
+}
+[Tools Executor] 并行执行完成，耗时: 11066ms
+[ChatService] 工具执行完成，结果数量: 1
+[ChatService] Hybrid模式：执行知识库检索...
+[Tools Executor] 开始执行 1 个工具
+[Tool Executor] 处理工具: search_knowledge_base
+[Knowledge] 搜索"明天天气怎么样 深圳": 找到 0 个相关文件
+[Tools Executor] 并行执行完成，耗时: 2ms
+
+========== LLM回复生成 ==========
+[LLM] 使用模型: MiniMax-M2.5
+[LLM] 对话模式: hybrid
+[LLM] 工具上下文长度: 41 字符
+[LLM] 系统提示词长度: 324 字符
+[LLM] 用户Query: 明天天气怎么样 深圳
+[LLM] 工具上下文预览: 【知识库】未找到与"明天天气怎么样 深圳"相关的文档，请尝试其他查询或调整关键词。
+[LLM] 正在调用LLM...
+[AI Service] 模型配置 - protocol: minimax baseURL: http://1811081066449577.cn-beijing.pai-eas.aliyuncs.com/api/predict/ctgii_mm25/v1 modelId: MiniMax-M2.5    
+[AI Service] 调用 URL: http://1811081066449577.cn-beijing.pai-eas.aliyuncs.com/api/predict/ctgii_mm25/v1/chat/completions
+[LLM Response] MiniMax-M2.5 | 回复消耗: 292 tokens
+[LLM Total] MiniMax-M2.5 | 1225 tokens (prompt: 968 , completion: 257 )
+========== 消息处理完成 ==========
+[ChatService] 返回结果来源: AI

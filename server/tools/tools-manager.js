@@ -56,6 +56,52 @@ class ToolsManager {
     return entry ? entry.config : null;
   }
 
+  /**
+   * 获取所有工具的完整描述（用于前端展示）
+   * @returns {Array} 按类别分组的工具列表
+   */
+  getToolsWithFullDescriptions() {
+    const categories = {};
+    for (const [name, config] of this.manifest.entries()) {
+      const category = config.category || '其他';
+      if (!categories[category]) {
+        categories[category] = [];
+      }
+      categories[category].push({
+        name: config.name,
+        description: config.description,
+        trigger: config.trigger || [],
+        usage: config.usage || ''
+      });
+    }
+
+    const categoryNames = {
+      '代码执行': '代码执行',
+      '文件操作': '文件操作',
+      '辅助工具': '辅助工具',
+      '生活工具': '生活工具',
+      '宠物工具': '宠物工具',
+      '图片工具': '图片工具',
+      '其他': '其他'
+    };
+
+    return Object.entries(categories).map(([category, tools]) => ({
+      category: categoryNames[category] || category,
+      tools
+    }));
+  }
+
+  /**
+   * 获取所有工具的概要描述
+   * @returns {Array} 工具列表
+   */
+  getAllToolSummaries() {
+    return Array.from(this.manifest.values()).map(config => ({
+      name: config.name,
+      description: config.description
+    }));
+  }
+
   getAll() {
     return Array.from(this.tools.values()).map(entry => ({
       name: entry.config.name,

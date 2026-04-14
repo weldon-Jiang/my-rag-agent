@@ -1,0 +1,29 @@
+<div id="chatPage" class="page active">
+    <div class="chat-container">
+        <div class="session-sidebar">
+            <div class="session-header">
+                <button id="newSessionBtn" class="new-session-btn">+ 新建会话</button>
+            </div>
+            <div id="sessionList" class="session-list"></div>
+        </div>
+        <div class="chat-main">
+            <div class="chat-top-controls">
+                <div class="mode-buttons">
+                    <button class="mode-btn" data-mode="knowledge">仅知识库</button>
+                    <button class="mode-btn" data-mode="ai">仅AI</button>
+                    <button class="mode-btn active" data-mode="hybrid">混合</button>
+                </div>
+                <div id="modelSelectWrapper"></div>
+            </div>
+            <div id="chatMessages" class="chat-messages"></div>
+
+            <div class="input-area">
+                <div class="input-wrapper">
+                    <textarea id="chatInput" placeholder="输入你的问题... (Shift+Enter换行)" rows="3"></textarea>
+                    <button id="sendBtn">发送</button>
+                </div>
+                <div class="attachments" id="attachments"></div>
+            </div>
+        </div>
+    </div>
+</div>

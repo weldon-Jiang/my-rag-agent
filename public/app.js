@@ -3,6 +3,49 @@
  * @description 处理所有前端逻辑，包括会话管理、聊天、文件上传、模型配置等
  */
 
+let API_BASE = null;
+
+async function getApiBase() {
+  if (API_BASE) return API_BASE;
+
+  if (window.electronAPI && window.electronAPI.serverPort) {
+    API_BASE = `http://localhost:${window.electronAPI.serverPort}`;
+    return API_BASE;
+  }
+
+  try {
+    const response = await fetch('/api/port');
+    if (response.ok) {
+      const data = await response.json();
+      API_BASE = `http://localhost:${data.port}`;
+      return API_BASE;
+    }
+  } catch (e) {
+    console.log('[API] Failed to get port from server');
+  }
+
+  if (window.electronAPI && window.electronAPI.getServerPort) {
+    const port = window.electronAPI.getServerPort();
+    if (port) {
+      API_BASE = `http://localhost:${port}`;
+      return API_BASE;
+    }
+  }
+
+  if (window.location.port) {
+    API_BASE = `http://localhost:${window.location.port}`;
+  } else {
+    API_BASE = 'http://localhost:3000';
+  }
+  return API_BASE;
+}
+
+async function getApiBaseSync() {
+  if (API_BASE) return API_BASE;
+  if (window.electronAPI?.serverPort) return `http://localhost:${window.electronAPI.serverPort}`;
+  return 'http://localhost:' + (window.location.port || '3000');
+}
+
 /**
  * 全局状态变量
  */
@@ -16,18 +59,39 @@ let selectedFiles = [];
 /**
  * DOM加载完成后初始化应用
  */
-document.addEventListener('DOMContentLoaded', () => {
-    loadSessions();
-    loadFiles();
-    loadModels();
-    setupEventListeners();
-    setupNavigation();
-    setupDropzone();
-    setupChatInput();
-    setupModelModal();
-    initTheme();
-    setupSessionEvents();
+document.addEventListener('DOMContentLoaded', async () => {
+    await initializeApp();
 });
+
+/**
+ * 初始化应用
+ * @description 加载页面 HTML、组件，然后初始化各模块
+ */
+async function initializeApp() {
+    try {
+        await getApiBase();
+        console.log('[App] API_BASE:', API_BASE);
+
+        await router.loadAllPagesHTML();
+        await router.loadAllComponents();
+
+        await loadSessions();
+        loadFiles();
+        loadModels();
+        setupEventListeners();
+        setupNavigation();
+        setupDropzone();
+        setupChatInput();
+        setupModelModal();
+        initTheme();
+        setupSessionEvents();
+        setupBatchDeleteEvents();
+
+        router.navigateTo('chat');
+    } catch (error) {
+        console.error('[App] 初始化失败:', error);
+    }
+}
 
 /**
  * 设置会话相关事件监听器
@@ -181,10 +245,13 @@ function setupEventListeners() {
     document.querySelectorAll('.mode-btn').forEach(btn => {
         btn.addEventListener('click', () => {
             selectedMode = btn.dataset.mode;
+            window.currentMode = selectedMode;
             updateModeButtons();
         });
     });
 }
+
+window.currentMode = selectedMode;
 
 /**
  * 更新模式按钮的激活状态
@@ -394,7 +461,7 @@ async function uploadFiles(files) {
             const formData = new FormData();
             formData.append('file', file);
 
-            const response = await fetch('/api/files/upload', {
+            const response = await fetch(`${API_BASE}/api/files/upload`, {
                 method: 'POST',
                 body: formData
             });
@@ -451,7 +518,7 @@ function showToast(message, type = 'success') {
  */
 async function loadFiles() {
     try {
-        const response = await fetch('/api/files');
+        const response = await fetch(`${API_BASE}/api/files`);
         const files = await response.json();
         renderFileList(files);
     } catch (error) {
@@ -471,22 +538,29 @@ async function loadSkillTools() {
     try {
         skillsContainer.innerHTML = '<div class="loading-placeholder">加载中...</div>';
         toolsContainer.innerHTML = '<div class="loading-placeholder">加载中...</div>';
-        const response = await fetch('/api/skills');
+        const response = await fetch(`${API_BASE}/api/skills`);
         console.log('[DEBUG] /api/skills response status:', response.status);
         const data = await response.json();
         console.log('[DEBUG] /api/skills data received, skillsByCategory:', !!data.skillsByCategory, 'toolsWithDescriptions:', !!data.toolsWithDescriptions);
 
         let skillsHtml = '';
-        if (data.skillsByCategory && Object.keys(data.skillsByCategory).length > 0) {
+        if (data.skillsByCategory && Array.isArray(data.skillsByCategory) && data.skillsByCategory.length > 0) {
             console.log('[DEBUG] Rendering skills section');
-            for (const [category, skills] of Object.entries(data.skillsByCategory)) {
+            for (const category of data.skillsByCategory) {
+                if (!category || typeof category !== 'object') continue;
                 const categoryNames = {
-                    'file_processing': '文件处理',
-                    'info_query': '信息查询'
+                    '系统技能': '⚙️ 系统技能',
+                    '文件处理': '📦 文件处理',
+                    '信息查询': '🔍 信息查询',
+                    '用户交互': '💬 用户交互',
+                    '系统操作': '🖥️ 系统操作'
                 };
-                skillsHtml += `<div class="doc-category"><span class="category-label">${categoryNames[category] || category}</span></div>`;
+                const icon = category.icon || '';
+                const name = category.name || category;
+                skillsHtml += `<div class="doc-category"><span class="category-label">${categoryNames[name] || icon + ' ' + name}</span></div>`;
                 skillsHtml += '<div class="doc-items">';
-                for (const skill of skills) {
+                const categorySkills = category.skills || [];
+                for (const skill of categorySkills) {
                     const triggerText = Array.isArray(skill.trigger) ? skill.trigger.join(', ') : (skill.trigger || '自动触发');
                     const usageText = skill.usage || '';
                     skillsHtml += `<div class="tool-doc">
@@ -546,9 +620,13 @@ function renderFileList(files) {
 
     files.forEach(file => {
         const fileItem = document.createElement('div');
-        fileItem.className = 'file-item';
+        fileItem.className = 'file-item' + (batchDeleteSelectedFiles.has(file.name) ? ' selected' : '');
         const sizeKB = (file.size / 1024).toFixed(2);
         fileItem.innerHTML = `
+            <input type="checkbox" class="file-checkbox"
+                   value="${file.name}"
+                   ${batchDeleteSelectedFiles.has(file.name) ? 'checked' : ''}
+                   onchange="toggleFileSelection('${file.name}', this.checked)">
             <span title="${file.name}">${file.name} (${sizeKB} KB)</span>
             <button onclick="deleteFile('${file.name}')">删除</button>
         `;
@@ -557,22 +635,90 @@ function renderFileList(files) {
 }
 
 /**
+ * 选中文件集合(批量删除用)
+ */
+let batchDeleteSelectedFiles = new Set();
+
+/**
+ * 切换文件选中状态
+ * @param {string} filename - 文件名
+ * @param {boolean} checked - 是否选中
+ */
+function toggleFileSelection(filename, checked) {
+    if (checked) {
+        batchDeleteSelectedFiles.add(filename);
+    } else {
+        batchDeleteSelectedFiles.delete(filename);
+    }
+    updateBatchDeleteButton();
+}
+
+/**
+ * 更新批量删除按钮状态
+ */
+function updateBatchDeleteButton() {
+    const btn = document.getElementById('batchDeleteBtn');
+    if (btn) {
+        btn.disabled = batchDeleteSelectedFiles.size === 0;
+    }
+}
+
+/**
+ * 批量删除选中的文件
+ */
+async function batchDeleteFiles() {
+    if (batchDeleteSelectedFiles.size === 0) return;
+    if (!confirm(`确定要删除选中的 ${batchDeleteSelectedFiles.size} 个文件吗？`)) return;
+
+    const filesToDelete = Array.from(batchDeleteSelectedFiles);
+    for (const filename of filesToDelete) {
+        await deleteFile(filename, true);
+    }
+    batchDeleteSelectedFiles.clear();
+    updateBatchDeleteButton();
+    loadFiles();
+}
+
+/**
+ * 设置批量删除事件监听
+ */
+function setupBatchDeleteEvents() {
+    document.getElementById('selectAllFiles')?.addEventListener('change', (e) => {
+        const checkboxes = document.querySelectorAll('.file-checkbox');
+        checkboxes.forEach(cb => {
+            cb.checked = e.target.checked;
+            if (e.target.checked) {
+                batchDeleteSelectedFiles.add(cb.value);
+            } else {
+                batchDeleteSelectedFiles.delete(cb.value);
+            }
+        });
+        updateBatchDeleteButton();
+    });
+
+    document.getElementById('batchDeleteBtn')?.addEventListener('click', batchDeleteFiles);
+}
+
+/**
  * 删除指定文件
  * @param {string} filename - 要删除的文件名
+ * @param {boolean} silent - 是否静默删除（不弹确认框，不自动刷新）
  * @description 调用删除API删除文件,成功后刷新文件列表
  */
-async function deleteFile(filename) {
-    if (!confirm(`确定要删除文件 ${filename} 吗？`)) {
+async function deleteFile(filename, silent = false) {
+    if (!silent && !confirm(`确定要删除文件 ${filename} 吗？`)) {
         return;
     }
 
     try {
-        const response = await fetch(`/api/files/${encodeURIComponent(filename)}`, {
+        const response = await fetch(`${API_BASE}/api/files/${encodeURIComponent(filename)}`, {
             method: 'DELETE'
         });
         const result = await response.json();
         if (result.success) {
-            loadFiles();
+            if (!silent) {
+                loadFiles();
+            }
         }
     } catch (error) {
         console.error('删除文件失败:', error);
@@ -585,11 +731,11 @@ async function deleteFile(filename) {
  */
 async function loadModels() {
     try {
-        const response = await fetch('/api/models');
+        const response = await fetch(`${API_BASE}/api/models`);
         const allModels = await response.json();
         currentModels = allModels;
 
-        const publishedResponse = await fetch('/api/models/published');
+        const publishedResponse = await fetch(`${API_BASE}/api/models/published`);
         const publishedModels = await publishedResponse.json();
         const publishedIds = publishedModels.map(m => m.id);
 
@@ -603,7 +749,7 @@ async function loadModels() {
         }
 
         renderModelsList();
-        renderModelSelect(publishedModels);
+        renderModelSelect(currentModels);
     } catch (error) {
         console.error('加载模型失败:', error);
     }
@@ -899,13 +1045,13 @@ async function saveModelFromModal() {
     try {
         let response;
         if (editingModelId) {
-            response = await fetch(`/api/models/${editingModelId}`, {
+            response = await fetch(`${API_BASE}/api/models/${editingModelId}`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(modelData)
             });
         } else {
-            response = await fetch('/api/models', {
+            response = await fetch(`${API_BASE}/api/models`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(modelData)
@@ -944,7 +1090,7 @@ async function deleteModel(modelId) {
     if (!confirm('确定要删除此模型吗？')) return;
 
     try {
-        const response = await fetch(`/api/models/${modelId}`, {
+        const response = await fetch(`${API_BASE}/api/models/${modelId}`, {
             method: 'DELETE'
         });
 
@@ -970,7 +1116,7 @@ async function toggleModelPublished(modelId) {
     const newPublished = model.published === false;
 
     try {
-        const response = await fetch(`/api/models/${modelId}`, {
+        const response = await fetch(`${API_BASE}/api/models/${modelId}`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ published: newPublished })
@@ -1116,7 +1262,7 @@ async function sendMessage() {
                 try {
                     const formData = new FormData();
                     formData.append('file', file);
-                    const uploadRes = await fetch('/api/files/upload', {
+                    const uploadRes = await fetch(`${API_BASE}/api/files/upload`, {
                         method: 'POST',
                         body: formData
                     });
@@ -1141,19 +1287,20 @@ async function sendMessage() {
     const loadingId = showLoading();
     
     const session = sessions.find(s => s.id === currentSessionId);
-    const history = session ? session.messages.slice(0, -1).map(msg => ({
+    const history = (session && session.messages) ? session.messages.slice(0, -1).map(msg => ({
         role: msg.role,
         content: msg.content
     })) : [];
     
     try {
-        const response = await fetch('/api/chat', {
+        const response = await fetch(`${API_BASE}/api/chat`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ 
-                query: message, 
-                mode, 
-                model, 
+            body: JSON.stringify({
+                message,
+                sessionId: currentSessionId,
+                mode,
+                model,
                 history,
                 botName: getBotName(),
                 userName: getUserName(),
@@ -1169,13 +1316,15 @@ async function sendMessage() {
         if (result.error) {
             addMessage(`错误: ${result.error}`, 'assistant');
             addMessageToSession('assistant', `错误: ${result.error}`);
-        } else if (result.clarification) {
-            addMessageToSession('assistant', result.response || '');
+        } else if (result.type === 'clarification') {
             handleClarification(result);
         } else {
-            addMessage(result.response, 'assistant', result.source, result.knowledgeResults);
-            addMessageToSession('assistant', result.response, { source: result.source, knowledgeResults: result.knowledgeResults });
-            
+            addMessage(result.content, 'assistant', result.source, result.toolResults || []);
+            addMessageToSession('assistant', result.content, {
+                source: result.source,
+                knowledgeResults: result.knowledgeResults
+            });
+
             if (result.newBotName) {
                 setBotName(result.newBotName);
                 console.log('[Bot] 智能体名称已更新:', result.newBotName);
@@ -1204,21 +1353,36 @@ async function sendMessage() {
  * @param {string} content - 消息内容
  * @param {string} role - 角色 ('user' | 'assistant')
  * @param {string} source - 来源
- * @param {Array} knowledgeResults - 知识库结果
+ * @param {Array} toolResults - 工具结果数组
  * @param {Array} attachments - 附件列表
  */
-function addMessage(content, role, source = '', knowledgeResults = [], attachments = []) {
+function addMessage(content, role, source = '', toolResults = [], attachments = []) {
     const chatMessages = document.getElementById('chatMessages');
     const messageDiv = document.createElement('div');
     messageDiv.className = `message ${role}`;
-    
+
+    const sourceLabels = {
+        'llm': '🤖 AI',
+        'LLM': '🤖 AI',
+        'AI': '🤖 AI助手',
+        '知识库': '📚 知识库',
+        '混合': '🔗 混合模式',
+        'AI + Tools': '🔧 AI + 工具',
+        '工具': '🔧 工具调用'
+    };
     let sourceHtml = '';
-    if (source) {
-        sourceHtml = `<div class="message-source">来源: ${source}</div>`;
+    if (source && sourceLabels[source]) {
+        sourceHtml = `<div class="message-source">${sourceLabels[source]}</div>`;
+    } else if (source) {
+        sourceHtml = `<div class="message-source">${source}</div>`;
     }
-    
+
+    const knowledgeResults = toolResults?.filter(r => r.tool === 'search_knowledge_base' && r.content);
     if (knowledgeResults && knowledgeResults.length > 0) {
-        sourceHtml += `<div class="message-source">引用文件: ${knowledgeResults.map(r => r.filename).join(', ')}</div>`;
+        const fileNames = knowledgeResults.map(r => r.filename || r.tool).filter(Boolean);
+        if (fileNames.length > 0) {
+            sourceHtml += `<div class="message-source">引用文件: ${fileNames.join(', ')}</div>`;
+        }
     }
 
     let imageHtml = '';
@@ -1254,7 +1418,7 @@ function addMessage(content, role, source = '', knowledgeResults = [], attachmen
     if (imageHtml) {
         messageHtml += imageHtml;
     }
-    const processedContent = processImageUrls(answerContent);
+    const processedContent = contentRenderer.smartRender(answerContent);
     messageHtml += `<div class="message-content">${processedContent}</div>`;
     
     messageDiv.innerHTML = `
@@ -1309,14 +1473,51 @@ function escapeHtml(text) {
  * @returns {string} 替换后的HTML
  */
 function processImageUrls(content) {
-    const imageUrlRegex = /<image_url>(.*?)<\/image_url>/g;
-    return content.replace(imageUrlRegex, (match, url) => {
+    let result = content;
+
+    const imgTagRegex = /<image_url>\s*(\S+(?:\.jpe?g|\.png|\.gif|\.webp|\.svg)\S*)\s*<\/image_url>/gi;
+    result = result.replace(imgTagRegex, (match, url) => {
+        if (!url) return match;
         const trimmedUrl = url.trim();
+        if (!trimmedUrl.startsWith('http')) return match;
         return `<div class="image-result-container">
             <img src="${trimmedUrl}" alt="图片结果" class="result-image" onclick="toggleImageSize(this)" />
             <div class="image-hint">点击图片放大/缩小</div>
         </div>`;
     });
+
+    const markdownImgRegex = /!\[([^\]]*)\]\((\S+(?:\.jpe?g|\.png|\.gif|\.webp|\.svg)\S*)\)/g;
+    result = result.replace(markdownImgRegex, (match, alt, url) => {
+        if (!url) return match;
+        const trimmedUrl = url.trim();
+        if (!trimmedUrl.startsWith('http')) return match;
+        return `<div class="image-result-container">
+            <img src="${trimmedUrl}" alt="${alt || '图片结果'}" class="result-image" onclick="toggleImageSize(this)" />
+            <div class="image-hint">点击图片放大/缩小</div>
+        </div>`;
+    });
+
+    const backtickUrlRegex = /`(\S+(?:\.jpe?g|\.png|\.gif|\.webp|\.svg)\S*)`/gi;
+    result = result.replace(backtickUrlRegex, (match, url) => {
+        if (!url) return match;
+        const trimmedUrl = url.trim();
+        if (!trimmedUrl.startsWith('http') && !trimmedUrl.includes('images.dog.ceo') && !trimmedUrl.includes('picsum.photos')) return match;
+        return `<div class="image-result-container">
+            <img src="${trimmedUrl}" alt="图片结果" class="result-image" onclick="toggleImageSize(this)" />
+            <div class="image-hint">点击图片放大/缩小</div>
+        </div>`;
+    });
+
+    const plainUrlRegex = /(https?:\/\/[^\s<>"')\]]+(?:\.jpe?g|\.png|\.gif|\.webp|\.svg)(?:\?[^\s<>"')\]]*)?)/gi;
+    result = result.replace(plainUrlRegex, (match, url) => {
+        if (!url) return match;
+        return `<div class="image-result-container">
+            <img src="${url}" alt="图片结果" class="result-image" onclick="toggleImageSize(this)" />
+            <div class="image-hint">点击图片放大/缩小</div>
+        </div>`;
+    });
+
+    return result;
 }
 
 /**
@@ -1346,17 +1547,26 @@ let currentSessionId = null;
 const STORAGE_KEY = 'rag_agent_sessions';
 
 /**
- * 从localStorage加载会话列表
+ * 从服务器加载会话列表
  */
-function loadSessions() {
+async function loadSessions() {
     try {
-        const stored = localStorage.getItem(STORAGE_KEY);
-        if (stored) {
-            sessions = JSON.parse(stored);
+        const response = await fetch(`${API_BASE}/api/chat/sessions`);
+        if (response.ok) {
+            sessions = await response.json();
         }
         if (sessions.length === 0) {
-            createNewSession();
+            await createNewSession();
         } else {
+            for (const session of sessions) {
+                const msgResponse = await fetch(`${API_BASE}/api/chat/sessions/${session.id}`);
+                if (msgResponse.ok) {
+                    const data = await msgResponse.json();
+                    session.messages = data.messages || [];
+                } else {
+                    session.messages = [];
+                }
+            }
             currentSessionId = sessions[0].id;
             renderSessionList();
             loadSessionMessages(currentSessionId);
@@ -1364,16 +1574,25 @@ function loadSessions() {
     } catch (e) {
         console.error('加载会话失败:', e);
         sessions = [];
-        createNewSession();
+        await createNewSession();
     }
 }
 
 /**
- * 保存会话列表到localStorage
+ * 保存会话列表到服务器
  */
-function saveSessions() {
+async function saveSessions() {
     try {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(sessions));
+        for (const session of sessions) {
+            await fetch(`${API_BASE}/api/chat/sessions/${session.id}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    title: session.title,
+                    messages: session.messages
+                })
+            });
+        }
     } catch (e) {
         console.error('保存会话失败:', e);
     }
@@ -1383,7 +1602,23 @@ function saveSessions() {
  * 创建新会话
  * @returns {Object} 新创建的会话对象
  */
-function createNewSession() {
+async function createNewSession() {
+    try {
+        const response = await fetch(`${API_BASE}/api/chat/sessions`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' }
+        });
+        if (response.ok) {
+            const session = await response.json();
+            sessions.unshift(session);
+            currentSessionId = session.id;
+            renderSessionList();
+            clearChatMessages();
+            return session;
+        }
+    } catch (e) {
+        console.error('创建会话失败:', e);
+    }
     const session = {
         id: 'session_' + Date.now(),
         title: '新会话',
@@ -1403,15 +1638,21 @@ function createNewSession() {
  * 删除指定会话
  * @param {string} sessionId - 会话ID
  */
-function deleteSession(sessionId) {
+async function deleteSession(sessionId) {
+    try {
+        await fetch(`${API_BASE}/api/chat/sessions/${sessionId}`, {
+            method: 'DELETE'
+        });
+    } catch (e) {
+        console.error('删除会话失败:', e);
+    }
     sessions = sessions.filter(s => s.id !== sessionId);
     if (sessions.length === 0) {
-        createNewSession();
+        await createNewSession();
     } else if (currentSessionId === sessionId) {
         currentSessionId = sessions[0].id;
         loadSessionMessages(currentSessionId);
     }
-    saveSessions();
     renderSessionList();
 }
 
@@ -1438,11 +1679,68 @@ function loadSessionMessages(sessionId) {
 
     session.messages.forEach(msg => {
         if (msg.role === 'user') {
-            addMessage(msg.content, 'user');
+            if (msg.isClarificationResponse) {
+                const clarificationHtml = `
+                    <div class="message user">
+                        <div class="message-content">
+                            <div class="clarification-response">${escapeHtml(msg.content)}</div>
+                        </div>
+                    </div>
+                    ${msg.finalResponse ? `
+                    <div class="message assistant">
+                        <div class="message-content">
+                            ${escapeHtml(msg.finalResponse)}
+                        </div>
+                    </div>
+                    ` : ''}
+                `;
+                chatMessages.insertAdjacentHTML('beforeend', clarificationHtml);
+            } else {
+                addMessage(msg.content, 'user');
+            }
         } else if (msg.role === 'assistant') {
-            addMessage(msg.content, msg.source || 'assistant', msg.source, msg.knowledgeResults);
+            if (msg.isClarification) {
+                const sourceLabels = {
+                    'AI': '🤖 AI助手',
+                    '知识库': '📚 知识库',
+                    '混合': '🔗 混合模式',
+                    'AI + Tools': '🔧 AI + 工具',
+                    '工具': '🔧 工具调用'
+                };
+                const sourceLabel = sourceLabels[msg.source] || '';
+                let optionsHtml = '';
+                if (msg.clarificationOptions && msg.clarificationOptions.length > 0) {
+                    optionsHtml = `
+                        <div class="clarification-toggle" onclick="this.classList.toggle('expanded'); this.querySelector('.toggle-arrow').textContent = this.classList.contains('expanded') ? '▼' : '▶'; this.nextElementSibling.style.display = this.classList.contains('expanded') ? 'block' : 'none';">
+                            <span class="toggle-arrow">▶</span>
+                            <span class="toggle-text">查看选项</span>
+                        </div>
+                        <div class="clarification-options" style="display: none;">
+                            ${msg.clarificationOptions.map((option, index) => {
+                                const optionValue = typeof option === 'string' ? option : (option.value || option);
+                                const optionLabel = typeof option === 'string' ? option : (option.label || option.value || option);
+                                return `<div class="option-item">${String.fromCharCode(65 + index)}. ${escapeHtml(optionLabel)}</div>`;
+                            }).join('')}
+                        </div>
+                    `;
+                }
+                const clarificationHtml = `
+                    <div class="message assistant">
+                        <div class="message-content">
+                            ${sourceLabel ? `<div class="message-source">${sourceLabel}</div>` : ''}
+                            <div class="clarification-question">${escapeHtml(msg.content)}</div>
+                            ${optionsHtml}
+                        </div>
+                    </div>
+                `;
+                chatMessages.insertAdjacentHTML('beforeend', clarificationHtml);
+            } else {
+                addMessage(msg.content, msg.source || 'assistant', msg.source, msg.knowledgeResults);
+            }
         }
     });
+
+    chatMessages.scrollTop = chatMessages.scrollHeight;
 }
 
 /**
@@ -1451,9 +1749,13 @@ function loadSessionMessages(sessionId) {
  * @param {string} content - 消息内容
  * @param {Object} extra - 额外数据
  */
-function addMessageToSession(role, content, extra = {}) {
+async function addMessageToSession(role, content, extra = {}) {
     const session = sessions.find(s => s.id === currentSessionId);
     if (!session) return;
+
+    if (!session.messages) {
+        session.messages = [];
+    }
 
     const message = {
         role,
@@ -1470,7 +1772,7 @@ function addMessageToSession(role, content, extra = {}) {
         session.title = title;
     }
 
-    saveSessions();
+    await saveSessions();
     renderSessionList();
 }
 
@@ -1504,8 +1806,10 @@ function renderSessionList() {
     sessions.forEach(session => {
         const item = document.createElement('div');
         item.className = 'session-item' + (session.id === currentSessionId ? ' active' : '');
+        const tokenInfo = session.tokenUsage ? `<span class="session-item-tokens">🔥 ${session.tokenUsage.total}</span>` : '';
         item.innerHTML = `
             <span class="session-item-title">${escapeHtml(session.title)}</span>
+            ${tokenInfo}
             <span class="session-item-time">${formatTime(session.updatedAt)}</span>
             <button class="delete-session-btn" data-id="${session.id}">🗑️</button>
         `;
@@ -1545,14 +1849,26 @@ function clearChatMessages() {
 function handleClarification(data) {
     console.log('[Frontend] Received clarification request:', data);
 
+    const clarificationData = data.clarification || data;
+
     pendingClarification = {
-        id: data.clarification_id,
-        message: data.message,
-        type: data.type,
-        type_label: data.type_label,
-        options: data.options || [],
-        session_id: data.session_id
+        id: clarificationData.id || clarificationData.clarification_id,
+        message: clarificationData.question || '',
+        type: clarificationData.type || 'ask_clarification',
+        type_label: clarificationData.type_label || '',
+        options: clarificationData.options || [],
+        session_id: clarificationData.session_id,
+        originalQuery: clarificationData.originalQuery || '',
+        responses: clarificationData.responses || []
     };
+
+    addMessageToSession('assistant', pendingClarification.message, {
+        isClarification: true,
+        clarificationType: pendingClarification.type,
+        clarificationOptions: pendingClarification.options,
+        clarificationId: pendingClarification.id,
+        originalQuery: pendingClarification.originalQuery
+    });
 
     const chatMessages = document.getElementById('chatMessages');
     const messageDiv = document.createElement('div');
@@ -1561,33 +1877,31 @@ function handleClarification(data) {
     let optionsHtml = '';
     if (pendingClarification.options && pendingClarification.options.length > 0) {
         optionsHtml = `
-            <div class="clarification-options">
-                ${pendingClarification.options.map((option, index) => `
-                    <button class="clarification-option" data-option="${option}" data-index="${index}">
-                        ${option}
-                    </button>
-                `).join('')}
-            </div>
-            <div class="clarification-input">
-                <input type="text" id="clarificationInput" placeholder="或直接输入您的回答..." />
-                <button id="clarificationSubmit">确定</button>
+            <div class="clarification-wrapper">
+                <div class="clarification-question">${escapeHtml(pendingClarification.message)}</div>
+                <div class="clarification-options">
+                    ${pendingClarification.options.map((option, index) => {
+                        const optionValue = typeof option === 'string' ? option : (option.value || option);
+                        const optionLabel = typeof option === 'string' ? option : (option.label || option.value || option);
+                        return `
+                            <button class="clarification-option" data-option="${escapeHtml(optionValue)}" data-index="${index}">
+                                <span class="option-icon">${String.fromCharCode(65 + index)}</span>
+                                <span class="option-text">${escapeHtml(optionLabel)}</span>
+                            </button>
+                        `;
+                    }).join('')}
+                </div>
             </div>
         `;
     } else {
         optionsHtml = `
-            <div class="clarification-input">
-                <input type="text" id="clarificationInput" placeholder="请输入您的回答..." />
-                <button id="clarificationSubmit">确定</button>
+            <div class="clarification-wrapper">
+                <div class="clarification-question">${escapeHtml(pendingClarification.message)}</div>
             </div>
         `;
     }
 
-    messageDiv.innerHTML = `
-        <div class="message-content clarification-content">
-            <div class="clarification-message">${escapeHtml(data.message)}</div>
-            ${optionsHtml}
-        </div>
-    `;
+    messageDiv.innerHTML = `<div class="message-content clarification-content">${optionsHtml}</div>`;
 
     chatMessages.appendChild(messageDiv);
     chatMessages.scrollTop = chatMessages.scrollHeight;
@@ -1598,25 +1912,6 @@ function handleClarification(data) {
             submitClarification(option);
         });
     });
-
-    const submitBtn = document.getElementById('clarificationSubmit');
-    if (submitBtn) {
-        submitBtn.addEventListener('click', () => {
-            const input = document.getElementById('clarificationInput');
-            if (input && input.value.trim()) {
-                submitClarification(input.value.trim());
-            }
-        });
-    }
-
-    const input = document.getElementById('clarificationInput');
-    if (input) {
-        input.addEventListener('keypress', (e) => {
-            if (e.key === 'Enter' && input.value.trim()) {
-                submitClarification(input.value.trim());
-            }
-        });
-    }
 }
 
 /**
@@ -1624,67 +1919,76 @@ function handleClarification(data) {
  * @param {string} response - 用户响应内容
  */
 async function submitClarification(response) {
-    if (!pendingClarification) {
-        console.error('[Frontend] No pending clarification');
+    if (!pendingClarification || window._clarificationSubmitting) {
+        console.warn('[Frontend] No pending clarification or already submitting');
         return;
     }
 
+    window._clarificationSubmitting = true;
     console.log('[Frontend] Submitting clarification response:', response);
 
+    const clarificationId = pendingClarification.id;
+    const originalQuery = pendingClarification.originalQuery;
+    const clarificationQuestion = pendingClarification.message;
+
     try {
-        const responseObj = await fetch('/api/chat/clarification/respond', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                clarification_id: pendingClarification.id,
-                response: response
-            })
+        addMessage(response, 'user');
+        addMessageToSession('user', response, {
+            isClarificationResponse: true,
+            clarificationId: clarificationId,
+            originalQuery: originalQuery,
+            clarificationQuestion: clarificationQuestion
         });
-
-        const result = await responseObj.json();
-        console.log('[Frontend] Clarification response result:', result);
-
-        const clarificationMsg = document.querySelector('.clarification');
-        if (clarificationMsg) {
-            clarificationMsg.remove();
-        }
-
-        addMessage(`已响应: ${response}`, 'user');
 
         const loadingId = showLoading();
 
-        const chatResponse = await fetch('/api/chat', {
+        const responseObj = await fetch(`${API_BASE}/api/chat`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
             },
             body: JSON.stringify({
-                query: response,
+                message: response,
+                clarification_id: clarificationId,
+                original_query: originalQuery,
                 mode: selectedMode,
-                model: selectedModel
+                model: selectedModel,
+                sessionId: currentSessionId
             })
         });
 
         removeLoading(loadingId);
 
-        const chatResult = await chatResponse.json();
+        const result = await responseObj.json();
+        console.log('[Frontend] Clarification response result:', result);
 
-        if (chatResult.error) {
-            addMessage(`错误: ${chatResult.error}`, 'assistant');
-        } else {
-            if (chatResult.clarification) {
-                handleClarification(chatResult);
-            } else {
-                addMessage(chatResult.response, 'assistant', chatResult.source, chatResult.knowledgeResults);
-            }
+        if (result.type === 'clarification') {
+            pendingClarification = {
+                id: result.clarification_id,
+                message: result.question,
+                type: result.type,
+                type_label: result.type_label || '',
+                options: result.options || [],
+                session_id: sessionId,
+                originalQuery: '',
+                responses: []
+            };
+            showClarification(result);
+        } else if (result.content) {
+            addMessage(result.content, 'assistant', result.source, result.toolResults || []);
+            pendingClarification = null;
+        } else if (result.error) {
+            addMessage(`错误: ${result.error}`, 'assistant');
+            pendingClarification = null;
         }
 
-        pendingClarification = null;
+        window._clarificationSubmitting = false;
 
     } catch (error) {
         console.error('[Frontend] Error submitting clarification:', error);
+        removeLoading();
         addMessage(`提交响应失败: ${error.message}`, 'assistant');
+        window._clarificationSubmitting = false;
+        pendingClarification = null;
     }
 }

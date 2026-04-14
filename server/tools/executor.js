@@ -67,13 +67,11 @@ async function executeCommand(command, options = {}) {
       }
     }
 
-    console.log(`[Bash Executor] Executing: ${actualCommand}`);
+    const startTime = Date.now();
+    let stdout = '';
+    let stderr = '';
 
     return new Promise((resolve, reject) => {
-      const startTime = Date.now();
-      let stdout = '';
-      let stderr = '';
-
       let finalCommand = actualCommand;
       if (isWindows) {
         finalCommand = `chcp 65001 >nul 2>&1 && ${actualCommand}`;
@@ -109,7 +107,6 @@ async function executeCommand(command, options = {}) {
 
       proc.on('close', (code) => {
         const duration = Date.now() - startTime;
-        console.log(`[Bash Executor] Command finished with code ${code} in ${duration}ms`);
 
         resolve({
           success: code === 0,

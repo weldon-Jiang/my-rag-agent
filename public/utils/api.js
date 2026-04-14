@@ -4,7 +4,24 @@
  * @module utils/api
  */
 
-const API_BASE = '';
+/**
+ * 获取 API 基础地址
+ * @returns {string} API 基础地址
+ */
+function getApiBase() {
+  console.log('[API] getApiBase called');
+  console.log('[API] window.electronAPI:', window.electronAPI);
+  console.log('[API] window.electronAPI?.serverPort:', window.electronAPI?.serverPort);
+
+  if (window.electronAPI && window.electronAPI.serverPort) {
+    const base = `http://localhost:${window.electronAPI.serverPort}`;
+    console.log('[API] Using electronAPI port, base:', base);
+    return base;
+  }
+  const fallback = 'http://localhost:3031';
+  console.log('[API] Using fallback, base:', fallback);
+  return fallback;
+}
 
 /**
  * 发送 GET 请求
@@ -13,6 +30,7 @@ const API_BASE = '';
  * @returns {Promise<Object>} 响应数据
  */
 async function get(url, params = {}) {
+  const API_BASE = getApiBase();
   const queryString = new URLSearchParams(params).toString();
   const fullUrl = queryString ? `${API_BASE}${url}?${queryString}` : `${API_BASE}${url}`;
 
@@ -35,6 +53,7 @@ async function get(url, params = {}) {
  * @returns {Promise<Object>} 响应数据
  */
 async function post(url, data = {}) {
+  const API_BASE = getApiBase();
   const response = await fetch(`${API_BASE}${url}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -54,6 +73,7 @@ async function post(url, data = {}) {
  * @returns {Promise<Object>} 响应数据
  */
 async function del(url) {
+  const API_BASE = getApiBase();
   const response = await fetch(`${API_BASE}${url}`, {
     method: 'DELETE',
     headers: { 'Content-Type': 'application/json' }
@@ -79,10 +99,13 @@ const api = {
   // 文件相关
   files: {
     list: () => get('/api/files'),
-    upload: (formData) => fetch(`${API_BASE}/api/files/upload`, {
-      method: 'POST',
-      body: formData
-    }).then(r => r.json()),
+    upload: (formData) => {
+      const API_BASE = getApiBase();
+      return fetch(`${API_BASE}/api/files/upload`, {
+        method: 'POST',
+        body: formData
+      }).then(r => r.json());
+    },
     delete: (filename) => del(`/api/files/${encodeURIComponent(filename)}`)
   },
 

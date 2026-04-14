@@ -2,6 +2,76 @@ const path = require('path');
 
 const skillsManifest = [
   {
+    name: 'preprocessor-skill',
+    description: '预处理器 - 封装命令检测、用户画像、历史上下文等预处理逻辑',
+    trigger: ['预处理', '前置处理'],
+    usage: '封装命令检测、用户画像、Bot名称、历史上下文等预处理逻辑',
+    tools: [],
+    supportedTypes: [],
+    requiredParams: ['query'],
+    file: path.join(__dirname, 'preprocessor/preprocessor-skill.js')
+  },
+  {
+    name: 'memory-skill',
+    description: '记忆分析 - 分析对话历史、提取上下文相关性',
+    trigger: ['历史', '记忆', '之前', '刚才', '上次', '之前说'],
+    usage: '分析对话历史，提取与当前查询相关的上下文信息',
+    tools: [],
+    supportedTypes: [],
+    requiredParams: ['query'],
+    file: path.join(__dirname, 'memory/memory-skill.js')
+  },
+  {
+    name: 'fashion-skill',
+    description: '穿衣建议 - 根据天气情况生成穿衣建议',
+    trigger: ['穿什么', '穿啥', '衣服', '穿搭', '衣着', '建议', '带什么', '带啥', '装备'],
+    usage: '根据天气情况生成具体穿衣建议和服装搭配推荐',
+    tools: [],
+    supportedTypes: [],
+    requiredParams: ['query'],
+    file: path.join(__dirname, 'fashion/fashion-skill.js')
+  },
+  {
+    name: 'activity-skill',
+    description: '活动理解 - 检测户外活动并生成建议',
+    trigger: ['徒步', '跑步', '骑行', '露营', '运动', '爬山', '登山', '钓鱼', '约会'],
+    usage: '检测用户提到的户外活动，生成相应的活动建议和穿衣建议',
+    tools: [],
+    supportedTypes: [],
+    requiredParams: ['query'],
+    file: path.join(__dirname, 'activity/activity-skill.js')
+  },
+  {
+    name: 'user-profile-skill',
+    description: '用户画像 - 提取用户信息、名称、关系等',
+    trigger: ['我叫', '我是', '你叫我', '以后叫我', '称呼我', '我的名字'],
+    usage: '从对话中提取用户信息，包括用户名、关系设定等',
+    tools: [],
+    supportedTypes: [],
+    requiredParams: ['query'],
+    file: path.join(__dirname, 'user-profile/user-profile-skill.js')
+  },
+  {
+    name: 'command-skill',
+    description: '命令处理 - 处理系统命令如清空历史、重置会话、退出等',
+    trigger: ['清空', '重置', '帮助', '退出', '新对话', '新会话', '重新开始'],
+    usage: '处理系统命令，包括清空历史、重置会话、显示帮助、退出对话',
+    tools: [],
+    supportedTypes: [],
+    requiredParams: ['query'],
+    file: path.join(__dirname, 'command/command-skill.js')
+  },
+  {
+    name: 'nlu-skill',
+    description: '自然语言理解 - 意图分析、实体提取、文本处理',
+    trigger: ['nlu', '理解', '分析', '意图', '关键词', '分析这句话', '提取'],
+    usage: '自然语言理解分析，提取用户意图和实体信息',
+    tools: [],
+    supportedTypes: [],
+    requiredParams: ['query'],
+    file: path.join(__dirname, 'nlu/nlu-skill.js')
+  },
+  {
     name: 'images-skill',
     description: '图片识别/OCR - 提取图片中的文字和内容',
     trigger: ['图片', '照片', '截图', 'ocr', '识别文字', '图片内容', '照片里', 'image'],
