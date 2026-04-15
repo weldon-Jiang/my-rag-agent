@@ -2,6 +2,7 @@ const path = require('path');
 const fs = require('fs');
 
 const MODELS_FILE = path.join(__dirname, '../../data/models.json');
+const MODEL_KEYS_ORDER = ['id', 'name', 'provider', 'type', 'protocol', 'url', 'modelId', 'apiKey', 'published'];
 
 let modelCache = null;
 
@@ -47,7 +48,18 @@ function getCurrentModel() {
 
 function addModel(model) {
   const models = getModels();
-  models.push(model);
+  const orderedModel = {};
+  for (const key of MODEL_KEYS_ORDER) {
+    if (key in model) {
+      orderedModel[key] = model[key];
+    }
+  }
+  for (const key of Object.keys(model)) {
+    if (!MODEL_KEYS_ORDER.includes(key)) {
+      orderedModel[key] = model[key];
+    }
+  }
+  models.push(orderedModel);
   return saveModels(models);
 }
 
@@ -57,7 +69,21 @@ function updateModel(modelId, updates) {
   if (index === -1) {
     return null;
   }
-  models[index] = { ...models[index], ...updates };
+  const existingModel = models[index];
+  const mergedModel = {};
+  for (const key of MODEL_KEYS_ORDER) {
+    if (key in updates) {
+      mergedModel[key] = updates[key];
+    } else if (key in existingModel) {
+      mergedModel[key] = existingModel[key];
+    }
+  }
+  for (const key of Object.keys(updates)) {
+    if (!MODEL_KEYS_ORDER.includes(key)) {
+      mergedModel[key] = updates[key];
+    }
+  }
+  models[index] = mergedModel;
   saveModels(models);
   return models[index];
 }

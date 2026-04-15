@@ -179,6 +179,7 @@
     --accent-color: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
     --bg-hover: #f0f2f8;
     --bg-input: white;
+    --bg-selected: #e3f2fd;
     --shadow-card: 0 4px 20px rgba(102, 126, 234, 0.1);
     --dropdown-bg: white;
     --model-card-bg: #f8f9fe;
@@ -189,6 +190,7 @@
     --mode-btn-bg: #f0f2f8;
     --mode-btn-text: #5a5a7a;
     --mode-btn-active-bg: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    --tab-active-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
     --mode-btn-active-text: white;
     --upload-dropzone-bg: #fafbff;
     --upload-dropzone-border: #667eea;
@@ -227,6 +229,7 @@
     --accent-color: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
     --bg-hover: #2a2a3e;
     --bg-input: #252535;
+    --bg-selected: #3a3a5e;
     --shadow-card: 0 4px 20px rgba(0, 0, 0, 0.3);
     --dropdown-bg: #1e1e2e;
     --model-card-bg: #252535;
@@ -264,6 +267,7 @@
     --top-bar-bg: #1e1e2e;
     --top-bar-text: #e8e8f2;
     --page-title-color: #e8e8f2;
+    --tab-active-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
 }
 
 html, body {
@@ -868,30 +872,38 @@ button:hover {
 
 .skill-tools-tabs {
     display: flex;
-    gap: 10px;
+    gap: 4px;
     margin-bottom: 15px;
-    padding: 0 20px;
+    padding: 4px;
+    background: var(--bg-input);
+    border-radius: 12px;
     flex-shrink: 0;
+    width: fit-content;
+    margin-left: 20px;
 }
 
 .tab-btn {
-    padding: 10px 24px;
+    padding: 10px 28px;
     border: none;
-    background: var(--bg-hover);
+    background: transparent;
     cursor: pointer;
     border-radius: 8px;
     font-size: 0.9rem;
-    transition: all 0.2s;
-    color: var(--text-primary);
+    font-weight: 500;
+    transition: all 0.25s ease;
+    color: var(--text-secondary);
+    position: relative;
 }
 
 .tab-btn:hover {
-    background: var(--border-color);
+    color: var(--text-primary);
+    background: var(--bg-hover);
 }
 
 .tab-btn.active {
-    background: #667eea;
-    color: white;
+    background: var(--bg-card);
+    color: var(--text-primary);
+    box-shadow: var(--tab-active-shadow);
 }
 
 .skill-tools-container {
@@ -1092,13 +1104,6 @@ button:hover {
     display: block;
 }
 
-.tool-doc {
-    padding: 10px;
-    background: var(--bg-hover);
-    border-radius: 6px;
-    text-align: center;
-}
-
 .tool-doc h4 {
     margin: 0 0 5px 0;
     color: #667eea;
@@ -1120,6 +1125,7 @@ button:hover {
 .usage-hint {
     margin-top: 4px !important;
     font-size: 0.7rem !important;
+    font-weight: 600 !important;
     color: #667eea !important;
 }
 
@@ -1241,7 +1247,7 @@ button:hover {
     justify-content: space-between;
     align-items: center;
     padding: 10px 12px;
-    background: #f5f5f5;
+    background: var(--bg-card);
     border-radius: 6px;
     margin-bottom: 8px;
     transition: background 0.2s;
@@ -1252,7 +1258,7 @@ button:hover {
 }
 
 .file-item.selected {
-    background-color: var(--bg-selected, #e3f2fd);
+    background-color: var(--bg-selected);
 }
 
 .file-item input[type="checkbox"] {

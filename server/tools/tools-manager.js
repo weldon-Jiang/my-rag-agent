@@ -20,6 +20,7 @@ class ToolsManager {
       name,
       description: config.description || '',
       trigger: config.trigger || [],
+      usage: config.usage || '',
       parameters: config.parameters || {},
       requiredParams: config.requiredParams || [],
       file: config.file,

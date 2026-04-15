@@ -99,9 +99,9 @@ function renderSkills(skillsByCategory) {
         <div class="tool-doc">
           <h4>${escapeHtml(skill.name || 'Unknown')}</h4>
           <p>${escapeHtml(skill.description || '')}</p>
-          <p class="trigger-hint">触发: ${escapeHtml(triggerText)}</p>
-          <p class="usage-hint">用法: ${escapeHtml(usageText)}</p>
-          ${toolsText ? `<p class="tools-hint">工具: ${escapeHtml(toolsText)}</p>` : ''}
+          <p><span class="usage-hint">触发: </span>${escapeHtml(triggerText)}</p>
+          <p><span class="usage-hint">用法: </span>${escapeHtml(usageText)}</p>
+          ${toolsText ? `<p><span class="usage-hint">工具: </span>${escapeHtml(toolsText)}</p>` : ''}
         </div>
       `;
     }
@@ -151,8 +151,8 @@ function renderTools(toolsWithDescriptions) {
         <div class="tool-doc">
           <h4>${escapeHtml(tool.name || 'Unknown')}</h4>
           <p>${escapeHtml(tool.description || '')}</p>
-          <p class="trigger-hint">触发: ${escapeHtml(triggerText)}</p>
-          <p class="usage-hint">用法: ${escapeHtml(usageText)}</p>
+          <p><span class="usage-hint">触发: </span>${escapeHtml(triggerText)}</p>
+          <p><span class="usage-hint">用法: </span>${escapeHtml(usageText)}</p>
         </div>
       `;
     }

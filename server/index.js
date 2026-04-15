@@ -156,6 +156,17 @@ app.get('/api/port', (req, res) => {
 });
 
 /**
+ * 通配符路由 - 处理所有前端路由
+ * 确保刷新页面时返回 index.html，由前端处理路由
+ */
+app.get('*', (req, res) => {
+  if (req.path.startsWith('/api/')) {
+    return res.status(404).json({ error: 'API not found' });
+  }
+  res.sendFile(path.join(__dirname, '../public/index.html'));
+});
+
+/**
  * 启动服务器
  * 监听指定端口，启动 Express 应用
  */

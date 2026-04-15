@@ -57,6 +57,122 @@ let editingModelId = null;
 let selectedFiles = [];
 
 /**
+ * 路由管理
+ */
+const AppRouter = {
+  pages: ['chat', 'knowledge', 'skill-tools', 'models'],
+
+  getPageFromPath(path) {
+    const pathname = path || window.location.pathname;
+    const basePath = window.electronAPI?.basePath || '';
+    let cleanPath = pathname;
+    if (basePath && cleanPath.startsWith(basePath)) {
+      cleanPath = cleanPath.substring(basePath.length);
+    }
+    if (cleanPath.startsWith('/')) {
+      cleanPath = cleanPath.substring(1);
+    }
+    const parts = cleanPath.split('/').filter(Boolean);
+    return parts[0] || 'chat';
+  },
+
+  getSessionIdFromUrl() {
+    const params = new URLSearchParams(window.location.search);
+    return params.get('session');
+  },
+
+  getPath(page, sessionId = null) {
+    const basePath = window.electronAPI?.basePath || '';
+    let path = basePath + '/' + page;
+    if (page === 'chat' && sessionId) {
+      path += '?session=' + sessionId;
+    }
+    return path;
+  },
+
+  navigate(page, sessionId = null, replace = false) {
+    const path = this.getPath(page, sessionId);
+    if (replace) {
+      history.replaceState({ page, sessionId }, '', path);
+    } else {
+      history.pushState({ page, sessionId }, '', path);
+    }
+    handlePageNavigation(page, sessionId);
+  },
+
+  handleInitialRoute() {
+    const page = this.getPageFromPath();
+    const sessionId = this.getSessionIdFromUrl();
+    handlePageNavigation(page, sessionId, true);
+    updateNavigationState(page);
+  }
+};
+
+window.AppRouter = AppRouter;
+
+/**
+ * 处理页面导航
+ */
+function handlePageNavigation(page, sessionId = null, isInitial = false) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+
+  const pageIdMap = {
+    'skill-tools': 'skillToolsPage',
+    'knowledge': 'knowledgePage',
+    'models': 'modelsPage',
+    'chat': 'chatPage'
+  };
+  const pageTitleMap = {
+    'skill-tools': '技能工具',
+    'knowledge': '知识库',
+    'models': '模型管理',
+    'chat': 'AI对话'
+  };
+  const actualPageId = pageIdMap[page] || `${page}Page`;
+
+  const pageElement = document.getElementById(actualPageId);
+  if (pageElement) {
+    pageElement.classList.add('active');
+  }
+
+  const pageTitle = document.getElementById('pageTitle');
+  if (pageTitle && pageTitleMap[page]) {
+    pageTitle.textContent = pageTitleMap[page];
+  }
+
+  updateNavigationState(page);
+
+  if (page === 'chat') {
+    if (sessionId) {
+      loadSessionMessages(sessionId);
+    } else if (window.currentSessionId) {
+      AppRouter.navigate('chat', window.currentSessionId, true);
+    }
+  } else if (page === 'knowledge') {
+    loadFiles();
+  } else if (page === 'models') {
+    loadModels();
+  } else if (page === 'skill-tools') {
+    setupSkillToolsTabs();
+    loadSkillTools();
+  }
+}
+
+/**
+ * 更新导航状态
+ */
+function updateNavigationState(activePage) {
+  document.querySelectorAll('.menu-item, .nav-item').forEach(item => {
+    const itemPage = item.dataset.page;
+    if (itemPage === activePage) {
+      item.classList.add('active');
+    } else {
+      item.classList.remove('active');
+    }
+  });
+}
+
+/**
  * DOM加载完成后初始化应用
  */
 document.addEventListener('DOMContentLoaded', async () => {
@@ -68,6 +184,9 @@ document.addEventListener('DOMContentLoaded', async () => {
  * @description 加载页面 HTML、组件，然后初始化各模块
  */
 async function initializeApp() {
+    if (window._appInitialized) return;
+    window._appInitialized = true;
+
     try {
         await getApiBase();
         console.log('[App] API_BASE:', API_BASE);
@@ -87,7 +206,17 @@ async function initializeApp() {
         setupSessionEvents();
         setupBatchDeleteEvents();
 
-        router.navigateTo('chat');
+        window.addEventListener('popstate', (e) => {
+            const page = AppRouter.getPageFromPath();
+            const sessionId = AppRouter.getSessionIdFromUrl();
+            handlePageNavigation(page, sessionId);
+            updateNavigationState(page);
+        });
+
+        const page = AppRouter.getPageFromPath();
+        const sessionId = AppRouter.getSessionIdFromUrl();
+        handlePageNavigation(page, sessionId);
+        updateNavigationState(page);
     } catch (error) {
         console.error('[App] 初始化失败:', error);
     }
@@ -275,12 +404,10 @@ function updateModeRadio() {
 function setupNavigation() {
     const menuItems = document.querySelectorAll('.menu-item, .nav-item');
     menuItems.forEach(item => {
-        item.addEventListener('click', () => {
+        item.addEventListener('click', (e) => {
+            e.preventDefault();
             const page = item.dataset.page;
-            navigateTo(page);
-
-            menuItems.forEach(m => m.classList.remove('active'));
-            item.classList.add('active');
+            AppRouter.navigate(page);
         });
     });
 }
@@ -579,8 +706,8 @@ async function loadSkillTools() {
                     skillsHtml += `<div class="tool-doc">
                         <h4>${skill.name || 'Unknown'}</h4>
                         <p>${skill.description || ''}</p>
-                        <p class="trigger-hint">触发: ${triggerText}</p>
-                        <p class="usage-hint">用法: ${usageText}</p>
+                        <p><span class="usage-hint">触发: </span>${triggerText}</p>
+                        <p><span class="usage-hint">用法: </span>${usageText}</p>
                     </div>`;
                 }
                 skillsHtml += '</div>';
@@ -595,13 +722,13 @@ async function loadSkillTools() {
                 toolsHtml += `<div class="doc-category"><span class="category-label">${group.category || ''}</span></div>`;
                 toolsHtml += '<div class="doc-items">';
                 for (const tool of group.tools || []) {
-                    const triggerText = tool.trigger || '';
+                    const triggerText = Array.isArray(tool.trigger) ? tool.trigger.join(', ') : (tool.trigger || '自动触发');
                     const usageText = tool.usage || '';
                     toolsHtml += `<div class="tool-doc">
                         <h4>${tool.name || 'Unknown'}</h4>
                         <p>${tool.description || ''}</p>
-                        <p class="trigger-hint">触发: ${triggerText}</p>
-                        <p class="usage-hint">用法: ${usageText}</p>
+                        <p><span class="usage-hint">触发: </span>${triggerText}</p>
+                        ${usageText ? `<p><span class="usage-hint">用法: </span>${usageText}</p>` : ''}
                     </div>`;
                 }
                 toolsHtml += '</div>';
@@ -904,9 +1031,10 @@ function renderModelsList() {
                 </div>
             </div>
             <div class="model-card-details">
-                <div><strong>ID:</strong> ${model.id}</div>
+                <div><strong>模型ID:</strong> ${model.modelId || model.id}</div>
                 <div><strong>供应商:</strong> ${model.provider}</div>
                 <div><strong>类型:</strong> ${model.type || 'chat'}</div>
+                <div><strong>协议:</strong> ${model.protocol || 'openai'}</div>
                 <div><strong>状态:</strong> <span class="publish-status ${publishedClass}">${publishedText}</span></div>
                 ${model.url ? `<div><strong>URL:</strong> ${model.url}</div>` : ''}
                 ${model.apiKey ? `<div><strong>密钥:</strong> ${'*'.repeat(model.apiKey.length)}</div>` : ''}
@@ -949,6 +1077,9 @@ function openAddModelModal() {
     document.getElementById('modalModelKey').value = '';
     document.getElementById('modalModelProvider').value = '';
     document.getElementById('modalModelPublished').checked = true;
+    document.getElementById('modalModelType').value = 'chat';
+    document.getElementById('modalModelProtocol').value = 'openai';
+    document.getElementById('modalModelId').readOnly = false;
     clearModalErrors();
     document.getElementById('modelModal').classList.add('open');
 }
@@ -961,8 +1092,10 @@ function openEditModelModal(model) {
     editingModelId = model.id;
     document.getElementById('modelModalTitle').textContent = '编辑模型';
     document.getElementById('modalModelName').value = model.name || '';
-    document.getElementById('modalModelId').value = model.id || '';
+    document.getElementById('modalModelId').value = model.modelId || model.id || '';
     document.getElementById('modalModelId').readOnly = true;
+    document.getElementById('modalModelType').value = model.type || 'chat';
+    document.getElementById('modalModelProtocol').value = model.protocol || 'openai';
     document.getElementById('modalModelUrl').value = model.url || '';
     document.getElementById('modalModelKey').value = model.apiKey || '';
     document.getElementById('modalModelProvider').value = model.provider || '';
@@ -1057,13 +1190,15 @@ function validateModelForm() {
 async function saveModelFromModal() {
     if (!validateModelForm()) return;
 
+    const modelIdInput = document.getElementById('modalModelId').value.trim();
     const modelData = {
         name: document.getElementById('modalModelName').value.trim(),
-        id: document.getElementById('modalModelId').value.trim(),
+        modelId: modelIdInput,
         url: document.getElementById('modalModelUrl').value.trim(),
         apiKey: document.getElementById('modalModelKey').value.trim(),
         provider: document.getElementById('modalModelProvider').value.trim(),
-        type: 'chat',
+        type: document.getElementById('modalModelType').value || 'chat',
+        protocol: document.getElementById('modalModelProtocol').value || 'openai',
         published: document.getElementById('modalModelPublished').checked
     };
 
@@ -1076,6 +1211,7 @@ async function saveModelFromModal() {
                 body: JSON.stringify(modelData)
             });
         } else {
+            modelData.id = modelIdInput;
             response = await fetch(`${API_BASE}/api/models`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -1593,6 +1729,7 @@ async function loadSessions() {
                 }
             }
             currentSessionId = sessions[0].id;
+            window.currentSessionId = currentSessionId;
             renderSessionList();
             loadSessionMessages(currentSessionId);
         }
@@ -1637,8 +1774,10 @@ async function createNewSession() {
             const session = await response.json();
             sessions.unshift(session);
             currentSessionId = session.id;
+            window.currentSessionId = session.id;
             renderSessionList();
             clearChatMessages();
+            AppRouter.navigate('chat', session.id, true);
             return session;
         }
     } catch (e) {
@@ -1653,9 +1792,11 @@ async function createNewSession() {
     };
     sessions.unshift(session);
     currentSessionId = session.id;
+    window.currentSessionId = session.id;
     saveSessions();
     renderSessionList();
     clearChatMessages();
+    AppRouter.navigate('chat', session.id, true);
     return session;
 }
 
@@ -1676,7 +1817,8 @@ async function deleteSession(sessionId) {
         await createNewSession();
     } else if (currentSessionId === sessionId) {
         currentSessionId = sessions[0].id;
-        loadSessionMessages(currentSessionId);
+        window.currentSessionId = currentSessionId;
+        AppRouter.navigate('chat', currentSessionId, true);
     }
     renderSessionList();
 }
@@ -1687,8 +1829,10 @@ async function deleteSession(sessionId) {
  */
 function switchSession(sessionId) {
     currentSessionId = sessionId;
+    window.currentSessionId = sessionId;
     loadSessionMessages(sessionId);
     renderSessionList();
+    AppRouter.navigate('chat', sessionId, true);
 }
 
 /**
