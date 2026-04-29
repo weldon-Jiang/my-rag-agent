@@ -1,11 +1,13 @@
 @echo off
 chcp 65001 >nul
 echo ========================================
-echo   本地知识库智能体 - 启动脚本
+echo   本地知识库智能体 - Python FastAPI 后端
 echo ========================================
 echo.
 
-set PORT=3000
+set PORT=3030
+set PYTHON_DIR=%~dp0
+set PYTHON_SERVER_DIR=%PYTHON_DIR%server-python
 
 echo 检查端口 %PORT% 是否被占用...
 for /f "tokens=5" %%a in ('netstat -ano ^| findstr :%PORT%') do (
@@ -14,13 +16,14 @@ for /f "tokens=5" %%a in ('netstat -ano ^| findstr :%PORT%') do (
 )
 
 echo.
-echo 等待2秒让端口释放...
-timeout /t 2 /nobreak >nul
+echo 等待3秒让端口释放...
+timeout /t 3 /nobreak >nul
 
 echo.
-echo 启动服务器...
+echo 启动 Python FastAPI 服务器...
 echo.
 
-npm start
+cd /d %PYTHON_SERVER_DIR%
+python -m uvicorn main:app --host 0.0.0.0 --port %PORT% --reload
 
 pause

@@ -2,10 +2,10 @@
   "name": "local-knowledge-agent",
   "version": "1.0.0",
   "description": "本地知识库智能体项目",
-  "main": "server/index.js",
+  "main": "server-nodejs-old/index.js",
   "scripts": {
-    "start": "node server/index.js",
-    "dev": "node server/index.js",
+    "start": "node server-nodejs-old/index.js",
+    "dev": "node server-nodejs-old/index.js",
     "go": "powershell -ExecutionPolicy Bypass -File start.ps1",
     "electron": "electron .",
     "build:electron": "set ELECTRON_BUILDER_CACHE=.\\.cache\\electron&& set ELECTRON_MIRROR=https://npmmirror.com/mirrors/electron/&& set ELECTRON_BUILDER_BINARIES_MIRROR=https://npmmirror.com/mirrors/electron-builder-binaries/&& electron-builder --win --dir",
@@ -47,6 +47,7 @@
   },
   "dependencies": {
     "axios": "^1.6.2",
+    "chromadb": "^3.4.3",
     "cors": "^2.8.5",
     "dotenv": "^16.3.1",
     "express": "^4.18.2",

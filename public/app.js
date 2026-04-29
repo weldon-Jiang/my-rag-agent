@@ -56,6 +56,87 @@ let attachments = [];
 let editingModelId = null;
 let selectedFiles = [];
 
+function modelSupportsMultimodal(modelId) {
+    const model = currentModels.find(m => m.id === modelId);
+    return model && model.supports_multimodal === true;
+}
+
+function updateUploadButtonState() {
+    const uploadDropzone = document.getElementById('uploadDropzone');
+    const fileInput = document.getElementById('fileInput');
+    if (!uploadDropzone) return;
+
+    const supportsMultimodal = modelSupportsMultimodal(selectedModel);
+
+    if (supportsMultimodal) {
+        uploadDropzone.title = '上传图片或文件';
+        uploadDropzone.classList.add('multimodal-supported');
+        uploadDropzone.classList.remove('text-only');
+        if (fileInput) {
+            fileInput.accept = '*/*';
+        }
+    } else {
+        uploadDropzone.title = '文档模式（图片将自动OCR分析）';
+        uploadDropzone.classList.add('text-only');
+        uploadDropzone.classList.remove('multimodal-supported');
+        if (fileInput) {
+            fileInput.accept = '.pdf,.doc,.docx,.txt,.md';
+        }
+    }
+}
+
+async function detectModelMultimodalSupport() {
+    const url = document.getElementById('modalModelUrl').value.trim();
+    const apiKey = document.getElementById('modalModelKey').value.trim();
+    const modelId = document.getElementById('modalModelId').value.trim();
+    const protocol = document.getElementById('modalModelProtocol').value || 'openai';
+
+    const resultSpan = document.getElementById('detectMultimodalResult');
+    const btn = document.getElementById('detectMultimodalBtn');
+
+    if (!url || !apiKey || !modelId) {
+        resultSpan.textContent = '请填写完整信息';
+        resultSpan.className = 'detect-result error';
+        return;
+    }
+
+    btn.disabled = true;
+    resultSpan.textContent = '检测中...';
+    resultSpan.className = 'detect-result';
+
+    try {
+        const response = await fetch(`${API_BASE}/api/models/detect-multimodal`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ url, apiKey, modelId, protocol })
+        });
+
+        const result = await response.json();
+
+        if (result.success) {
+            resultSpan.textContent = result.supported ? '✅ 支持图片' : '❌ 不支持';
+            resultSpan.className = 'detect-result success';
+            document.getElementById('modalModelMultimodal').checked = result.supported;
+        } else {
+            resultSpan.textContent = '❌ ' + (result.message || '检测失败');
+            resultSpan.className = 'detect-result error';
+        }
+    } catch (error) {
+        resultSpan.textContent = '❌ 检测失败';
+        resultSpan.className = 'detect-result error';
+        console.error('检测失败:', error);
+    } finally {
+        btn.disabled = false;
+    }
+}
+
+function setupModelModalEvents() {
+    const detectBtn = document.getElementById('detectMultimodalBtn');
+    if (detectBtn) {
+        detectBtn.addEventListener('click', detectModelMultimodalSupport);
+    }
+}
+
 /**
  * 路由管理
  */
@@ -142,14 +223,56 @@ function handlePageNavigation(page, sessionId = null, isInitial = false) {
 
   updateNavigationState(page);
 
+  const modelSelectWrapper = document.getElementById('modelSelectWrapper');
+  if (modelSelectWrapper) {
+    modelSelectWrapper.style.display = (page === 'chat') ? 'block' : 'none';
+  }
+
   if (page === 'chat') {
+    if (window.chatPage && typeof window.chatPage.init === 'function') {
+      window.chatPage.init();
+    } else {
+      console.log('[App] chatPage 模块未就绪，尝试加载模块');
+      if (typeof router !== 'undefined' && router.loadPageModule) {
+        router.loadPageModule('chat').then(module => {
+          console.log('[App] chat 模块已加载:', module);
+          window.chatPage = module;
+          if (module && module.init) {
+            module.init();
+          }
+        }).catch(err => {
+          console.error('[App] chat 模块加载失败:', err);
+        });
+      }
+    }
     if (sessionId) {
       loadSessionMessages(sessionId);
     } else if (window.currentSessionId) {
       AppRouter.navigate('chat', window.currentSessionId, true);
     }
   } else if (page === 'knowledge') {
-    loadFiles();
+    console.log('[App] knowledge 导航, window.knowledgePage:', window.knowledgePage);
+    if (window.knowledgePage && typeof window.knowledgePage.init === 'function') {
+      console.log('[App] 调用 knowledgePage.init()');
+      window.knowledgePage.init();
+    } else {
+      console.log('[App] knowledgePage 模块未就绪，尝试加载模块');
+      if (typeof router !== 'undefined' && router.loadPageModule) {
+        router.loadPageModule('knowledge').then(module => {
+          console.log('[App] 模块已加载:', module);
+          window.knowledgePage = module;
+          if (module && module.init) {
+            module.init();
+          }
+        }).catch(err => {
+          console.error('[App] 模块加载失败:', err);
+          loadFiles();
+        });
+      } else {
+        console.log('[App] router 未定义，使用 loadFiles()');
+        loadFiles();
+      }
+    }
   } else if (page === 'models') {
     loadModels();
   } else if (page === 'skill-tools') {
@@ -184,15 +307,24 @@ document.addEventListener('DOMContentLoaded', async () => {
  * @description 加载页面 HTML、组件，然后初始化各模块
  */
 async function initializeApp() {
-    if (window._appInitialized) return;
+    if (window._appInitialized) {
+        console.log('[App] 应用已初始化');
+        return;
+    }
     window._appInitialized = true;
 
+    console.log('[App] 开始初始化...');
     try {
         await getApiBase();
         console.log('[App] API_BASE:', API_BASE);
 
+        console.log('[App] 加载页面HTML...');
         await router.loadAllPagesHTML();
+        console.log('[App] 页面HTML加载完成');
+
+        console.log('[App] 加载组件...');
         await router.loadAllComponents();
+        console.log('[App] 组件加载完成');
 
         await loadSessions();
         loadFiles();
@@ -363,7 +495,6 @@ function setupThemeSwitcher() {
 function setupEventListeners() {
     setupThemeSwitcher();
 
-    document.getElementById('sendBtn').addEventListener('click', sendMessage);
     document.getElementById('openAddModelModalBtn')?.addEventListener('click', openAddModelModal);
     document.getElementById('uploadBtn')?.addEventListener('click', () => {
         if (selectedFiles.length > 0) {
@@ -485,6 +616,10 @@ function setupDropzone() {
     if (!dropzone) return;
 
     dropzone.addEventListener('click', () => {
+        if (!modelSupportsMultimodal(selectedModel)) {
+            showToast('当前模型不支持上传图片，请选择支持图片理解的模型', 'error');
+            return;
+        }
         document.getElementById('fileInput').click();
     });
 
@@ -658,7 +793,7 @@ function showToast(message, type = 'success') {
  */
 async function loadFiles() {
     try {
-        const response = await fetch(`${API_BASE}/api/files`);
+        const response = await fetch(`${API_BASE}/api/files/knowledge/`);
         const files = await response.json();
         renderFileList(files);
     } catch (error) {
@@ -678,36 +813,36 @@ async function loadSkillTools() {
     try {
         skillsContainer.innerHTML = '<div class="loading-placeholder">加载中...</div>';
         toolsContainer.innerHTML = '<div class="loading-placeholder">加载中...</div>';
-        const response = await fetch(`${API_BASE}/api/skills`);
+        const response = await fetch(`${API_BASE}/api/skills/`);
         console.log('[DEBUG] /api/skills response status:', response.status);
         const data = await response.json();
         console.log('[DEBUG] /api/skills data received, skillsByCategory:', !!data.skillsByCategory, 'toolsWithDescriptions:', !!data.toolsWithDescriptions);
 
         let skillsHtml = '';
-        if (data.skillsByCategory && Array.isArray(data.skillsByCategory) && data.skillsByCategory.length > 0) {
+        if (data.skillsByCategory && typeof data.skillsByCategory === 'object') {
             console.log('[DEBUG] Rendering skills section');
-            for (const category of data.skillsByCategory) {
-                if (!category || typeof category !== 'object') continue;
-                const categoryNames = {
-                    '系统技能': '⚙️ 系统技能',
-                    '文件处理': '📦 文件处理',
-                    '信息查询': '🔍 信息查询',
-                    '用户交互': '💬 用户交互',
-                    '系统操作': '🖥️ 系统操作'
-                };
-                const icon = category.icon || '';
-                const name = category.name || category;
-                skillsHtml += `<div class="doc-category"><span class="category-label">${categoryNames[name] || icon + ' ' + name}</span></div>`;
+            const categoryNames = {
+                '系统技能': '⚙️ 系统技能',
+                '文件处理': '📦 文件处理',
+                '信息查询': '🔍 信息查询',
+                '用户交互': '💬 用户交互',
+                '系统操作': '🖥️ 系统操作',
+                'info': '🔍 信息查询',
+                'knowledge': '📚 知识库',
+                'search': '🌐 Web搜索',
+                'file': '📄 文件处理',
+                'system': '🖥️ 系统操作'
+            };
+            for (const [categoryKey, categorySkills] of Object.entries(data.skillsByCategory)) {
+                if (!Array.isArray(categorySkills)) continue;
+                const categoryName = categoryNames[categoryKey] || categoryKey;
+                skillsHtml += `<div class="doc-category"><span class="category-label">${categoryName}</span></div>`;
                 skillsHtml += '<div class="doc-items">';
-                const categorySkills = category.skills || [];
                 for (const skill of categorySkills) {
-                    const triggerText = Array.isArray(skill.trigger) ? skill.trigger.join(', ') : (skill.trigger || '自动触发');
-                    const usageText = skill.usage || '';
                     skillsHtml += `<div class="tool-doc">
                         <h4>${skill.name || 'Unknown'}</h4>
                         <p>${skill.description || ''}</p>
-                        <p><span class="usage-hint">触发: </span>${triggerText}</p>
-                        <p><span class="usage-hint">用法: </span>${usageText}</p>
+                        <p><span class="usage-hint">工具: </span>${Array.isArray(skill.tools) ? skill.tools.join(', ') : skill.tools || ''}</p>
                     </div>`;
                 }
                 skillsHtml += '</div>';
@@ -716,23 +851,17 @@ async function loadSkillTools() {
         skillsContainer.innerHTML = skillsHtml || '<div class="empty-message">暂无技能数据</div>';
 
         let toolsHtml = '';
-        if (data.toolsWithDescriptions && data.toolsWithDescriptions.length > 0) {
+        if (data.toolsWithDescriptions && typeof data.toolsWithDescriptions === 'object') {
             console.log('[DEBUG] Rendering tools section');
-            for (const group of data.toolsWithDescriptions) {
-                toolsHtml += `<div class="doc-category"><span class="category-label">${group.category || ''}</span></div>`;
-                toolsHtml += '<div class="doc-items">';
-                for (const tool of group.tools || []) {
-                    const triggerText = Array.isArray(tool.trigger) ? tool.trigger.join(', ') : (tool.trigger || '自动触发');
-                    const usageText = tool.usage || '';
-                    toolsHtml += `<div class="tool-doc">
-                        <h4>${tool.name || 'Unknown'}</h4>
-                        <p>${tool.description || ''}</p>
-                        <p><span class="usage-hint">触发: </span>${triggerText}</p>
-                        ${usageText ? `<p><span class="usage-hint">用法: </span>${usageText}</p>` : ''}
-                    </div>`;
-                }
-                toolsHtml += '</div>';
+            toolsHtml += '<div class="doc-category"><span class="category-label">🛠️ 可用工具</span></div>';
+            toolsHtml += '<div class="doc-items">';
+            for (const [toolName, toolDesc] of Object.entries(data.toolsWithDescriptions)) {
+                toolsHtml += `<div class="tool-doc">
+                    <h4>${toolName}</h4>
+                    <p>${toolDesc}</p>
+                </div>`;
             }
+            toolsHtml += '</div>';
         }
         toolsContainer.innerHTML = toolsHtml || '<div class="empty-message">暂无工具数据</div>';
     } catch (error) {
@@ -760,15 +889,16 @@ function renderFileList(files) {
 
     files.forEach(file => {
         const fileItem = document.createElement('div');
-        fileItem.className = 'file-item' + (batchDeleteSelectedFiles.has(file.name) ? ' selected' : '');
+        const filename = file.filename || file.name || file.file_id;
+        fileItem.className = 'file-item' + (batchDeleteSelectedFiles.has(filename) ? ' selected' : '');
         const sizeKB = (file.size / 1024).toFixed(2);
         fileItem.innerHTML = `
             <input type="checkbox" class="file-checkbox"
-                   value="${file.name}"
-                   ${batchDeleteSelectedFiles.has(file.name) ? 'checked' : ''}
-                   onchange="toggleFileSelection('${file.name}', this.checked)">
-            <span title="${file.name}">${file.name} (${sizeKB} KB)</span>
-            <button onclick="deleteFile('${file.name}')">删除</button>
+                   value="${filename}"
+                   ${batchDeleteSelectedFiles.has(filename) ? 'checked' : ''}
+                   onchange="toggleFileSelection('${filename}', this.checked)">
+            <span title="${filename}">${filename} (${sizeKB} KB)</span>
+            <button onclick="deleteFile('${filename}')">删除</button>
         `;
         fileList.appendChild(fileItem);
     });
@@ -851,7 +981,7 @@ async function deleteFile(filename, silent = false) {
     }
 
     try {
-        const response = await fetch(`${API_BASE}/api/files/${encodeURIComponent(filename)}`, {
+        const response = await fetch(`${API_BASE}/api/files/${encodeURIComponent(filename)}/`, {
             method: 'DELETE'
         });
         const result = await response.json();
@@ -871,7 +1001,7 @@ async function deleteFile(filename, silent = false) {
  */
 async function loadModels() {
     try {
-        const response = await fetch(`${API_BASE}/api/models`);
+        const response = await fetch(`${API_BASE}/api/models/`);
         const allModels = await response.json();
         currentModels = allModels;
 
@@ -879,17 +1009,35 @@ async function loadModels() {
         const publishedModels = await publishedResponse.json();
         const publishedIds = publishedModels.map(m => m.id);
 
-        if (!selectedModel || !publishedIds.includes(selectedModel)) {
-            const minimaxModel = publishedModels.find(m => m.id === 'minimax-m2.5');
-            if (minimaxModel) {
-                selectedModel = minimaxModel.id;
-            } else if (publishedModels.length > 0) {
-                selectedModel = publishedModels[0].id;
+        const currentModelResponse = await fetch(`${API_BASE}/api/models/current`);
+        const currentModel = await currentModelResponse.json();
+
+        const urlParams = new URLSearchParams(window.location.search);
+        const modelFromUrl = urlParams.get('model');
+        const currentPath = window.location.pathname;
+        const isChatPage = currentPath === '/chat';
+
+        if (modelFromUrl && publishedIds.includes(modelFromUrl)) {
+            selectedModel = modelFromUrl;
+        } else if (!selectedModel || !publishedIds.includes(selectedModel)) {
+            selectedModel = currentModel?.id || (publishedModels.length > 0 ? publishedModels[0].id : null);
+            if (selectedModel && isChatPage) {
+                urlParams.set('model', selectedModel);
+                const newUrl = `${window.location.pathname}?${urlParams.toString()}`;
+                window.history.replaceState({}, '', newUrl);
             }
+        }
+
+        if (!isChatPage && urlParams.has('model')) {
+            urlParams.delete('model');
+            const cleanPath = currentPath || '/';
+            const newUrl = urlParams.toString() ? `${cleanPath}?${urlParams.toString()}` : cleanPath;
+            window.history.replaceState({}, '', newUrl);
         }
 
         renderModelsList();
         renderModelSelect(currentModels);
+        updateUploadButtonState();
     } catch (error) {
         console.error('加载模型失败:', error);
     }
@@ -993,6 +1141,16 @@ function selectModel(modelId) {
     }
     menu?.classList.remove('open');
     toggle?.classList.remove('active');
+    updateUploadButtonState();
+
+    const params = new URLSearchParams(window.location.search);
+    params.set('model', modelId);
+    let newUrl = window.location.pathname;
+    const paramsStr = params.toString();
+    if (paramsStr) {
+        newUrl += '?' + paramsStr;
+    }
+    window.history.replaceState({}, '', newUrl);
 }
 
 /**
@@ -1021,10 +1179,17 @@ function renderModelsList() {
         const publishedText = isPublished ? '已发布' : '未发布';
         const publishedClass = isPublished ? 'published' : 'unpublished';
         const toggleBtnText = isPublished ? '下架' : '发布';
+        const multimodalText = model.supports_multimodal ? '✅ 支持图片' : '❌ 不支持图片';
+        const multimodalClass = model.supports_multimodal ? 'multimodal-yes' : 'multimodal-no';
+        const isDefault = model.id === selectedModel;
+        const defaultBadge = isDefault ? '<span class="default-badge">默认</span>' : '';
+        const setDefaultBtn = isDefault ? '' : '<button class="set-default-btn" onclick="setDefaultModel(\'' + model.id + '\')">设为默认</button>';
+
         card.innerHTML = `
             <div class="model-card-header">
-                <div class="model-card-name">${model.name}</div>
+                <div class="model-card-name">${model.name} ${defaultBadge}</div>
                 <div class="model-card-actions">
+                    ${setDefaultBtn}
                     <button class="toggle-btn" onclick="toggleModelPublished('${model.id}')">${toggleBtnText}</button>
                     <button class="edit-btn" onclick="editModel('${model.id}')">编辑</button>
                     <button class="delete-btn" onclick="deleteModel('${model.id}')">删除</button>
@@ -1035,6 +1200,7 @@ function renderModelsList() {
                 <div><strong>供应商:</strong> ${model.provider}</div>
                 <div><strong>类型:</strong> ${model.type || 'chat'}</div>
                 <div><strong>协议:</strong> ${model.protocol || 'openai'}</div>
+                <div><strong>图片:</strong> <span class="${multimodalClass}">${multimodalText}</span></div>
                 <div><strong>状态:</strong> <span class="publish-status ${publishedClass}">${publishedText}</span></div>
                 ${model.url ? `<div><strong>URL:</strong> ${model.url}</div>` : ''}
                 ${model.apiKey ? `<div><strong>密钥:</strong> ${'*'.repeat(model.apiKey.length)}</div>` : ''}
@@ -1063,6 +1229,8 @@ function setupModelModal() {
             closeModelModal();
         }
     });
+
+    setupModelModalEvents();
 }
 
 /**
@@ -1079,6 +1247,7 @@ function openAddModelModal() {
     document.getElementById('modalModelPublished').checked = true;
     document.getElementById('modalModelType').value = 'chat';
     document.getElementById('modalModelProtocol').value = 'openai';
+    document.getElementById('modalModelMultimodal').checked = false;
     document.getElementById('modalModelId').readOnly = false;
     clearModalErrors();
     document.getElementById('modelModal').classList.add('open');
@@ -1096,6 +1265,7 @@ function openEditModelModal(model) {
     document.getElementById('modalModelId').readOnly = true;
     document.getElementById('modalModelType').value = model.type || 'chat';
     document.getElementById('modalModelProtocol').value = model.protocol || 'openai';
+    document.getElementById('modalModelMultimodal').checked = model.supports_multimodal || false;
     document.getElementById('modalModelUrl').value = model.url || '';
     document.getElementById('modalModelKey').value = model.apiKey || '';
     document.getElementById('modalModelProvider').value = model.provider || '';
@@ -1199,20 +1369,21 @@ async function saveModelFromModal() {
         provider: document.getElementById('modalModelProvider').value.trim(),
         type: document.getElementById('modalModelType').value || 'chat',
         protocol: document.getElementById('modalModelProtocol').value || 'openai',
+        supports_multimodal: document.getElementById('modalModelMultimodal').checked,
         published: document.getElementById('modalModelPublished').checked
     };
 
     try {
         let response;
         if (editingModelId) {
-            response = await fetch(`${API_BASE}/api/models/${editingModelId}`, {
+            response = await fetch(`${API_BASE}/api/models/${editingModelId}/`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(modelData)
             });
         } else {
             modelData.id = modelIdInput;
-            response = await fetch(`${API_BASE}/api/models`, {
+            response = await fetch(`${API_BASE}/api/models/`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(modelData)
@@ -1251,7 +1422,7 @@ async function deleteModel(modelId) {
     if (!confirm('确定要删除此模型吗？')) return;
 
     try {
-        const response = await fetch(`${API_BASE}/api/models/${modelId}`, {
+        const response = await fetch(`${API_BASE}/api/models/${modelId}/`, {
             method: 'DELETE'
         });
 
@@ -1277,7 +1448,7 @@ async function toggleModelPublished(modelId) {
     const newPublished = model.published === false;
 
     try {
-        const response = await fetch(`${API_BASE}/api/models/${modelId}`, {
+        const response = await fetch(`${API_BASE}/api/models/${modelId}/`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ published: newPublished })
@@ -1292,6 +1463,30 @@ async function toggleModelPublished(modelId) {
 }
 
 /**
+ * 设置默认模型
+ * @param {string} modelId - 模型ID
+ */
+async function setDefaultModel(modelId) {
+    try {
+        const response = await fetch(`${API_BASE}/api/models/set-default`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ model_id: modelId })
+        });
+
+        if (response.ok) {
+            const result = await response.json();
+            selectedModel = modelId;
+            loadModels();
+            renderModelSelect(currentModels);
+            alert(result.message || '默认模型已设置');
+        }
+    } catch (error) {
+        console.error('设置默认模型失败:', error);
+    }
+}
+
+/**
  * 设置聊天输入框的事件监听
  * @description 绑定回车发送、粘贴图片、拖拽文件等事件
  */
@@ -1299,19 +1494,20 @@ function setupChatInput() {
     const chatInput = document.getElementById('chatInput');
     if (!chatInput) return;
 
-    chatInput.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter' && !e.shiftKey) {
-            e.preventDefault();
-            sendMessage();
-        }
-    });
+    const chatPage = document.getElementById('chatPage');
+    const isChatPageActive = chatPage && chatPage.classList.contains('active');
 
     chatInput.addEventListener('paste', (e) => {
+        if (!isChatPageActive) return;
         const items = e.clipboardData?.items;
         if (items) {
             for (const item of items) {
                 if (item.type.indexOf('image') !== -1) {
                     e.preventDefault();
+                    if (!modelSupportsMultimodal(selectedModel)) {
+                        showToast('当前模型不支持图片，请选择支持图片理解的模型', 'error');
+                        return;
+                    }
                     const file = item.getAsFile();
                     addAttachment(file);
                 }
@@ -1320,12 +1516,18 @@ function setupChatInput() {
     });
 
     chatInput.addEventListener('dragover', (e) => {
+        if (!isChatPageActive) return;
         e.preventDefault();
     });
 
     chatInput.addEventListener('drop', (e) => {
+        if (!isChatPageActive) return;
         e.preventDefault();
         const files = e.dataTransfer.files;
+        if (files.length > 0 && !modelSupportsMultimodal(selectedModel)) {
+            showToast('当前模型不支持图片上传，请选择支持图片理解的模型', 'error');
+            return;
+        }
         for (const file of files) {
             addAttachment(file);
         }
@@ -1423,13 +1625,16 @@ async function sendMessage() {
                 try {
                     const formData = new FormData();
                     formData.append('file', file);
-                    const uploadRes = await fetch(`${API_BASE}/api/files/upload`, {
+                    const uploadRes = await fetch(`${API_BASE}/api/files/chat-upload`, {
                         method: 'POST',
                         body: formData
                     });
                     const uploadResult = await uploadRes.json();
                     if (uploadResult.success && uploadResult.path) {
-                        attachmentPaths.push(uploadResult.path);
+                        attachmentPaths.push({
+                            filepath: uploadResult.path,
+                            filename: uploadResult.filename
+                        });
                     }
                 } catch (err) {
                     console.error('上传附件失败:', err);
@@ -1454,18 +1659,14 @@ async function sendMessage() {
     })) : [];
     
     try {
-        const response = await fetch(`${API_BASE}/api/chat`, {
+        const response = await fetch(`${API_BASE}/api/chat/`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 message,
-                sessionId: currentSessionId,
+                session_id: currentSessionId,
                 mode,
                 model,
-                history,
-                botName: getBotName(),
-                userName: getUserName(),
-                relationship: getRelationship(),
                 attachments: attachmentPaths
             })
         });
@@ -1569,8 +1770,16 @@ function addMessage(content, role, source = '', toolResults = [], attachments = 
             thinkContent = content.substring(startIdx + thinkStart, endIdx).trim();
             const afterThink = endIdx + thinkEnd;
             answerContent = content.substring(afterThink).trim();
+            console.log('[Frontend] AI思考内容:', thinkContent);
         }
     }
+
+    answerContent = answerContent
+        .replace(/\[TOOL_CALL\][\s\S]*?\[\/TOOL_CALL\]/gi, '')
+        .replace(/\[tool_call\][\s\S]*?\[\/tool_call\]/gi, '')
+        .replace(/\{tool\s*=>[\s\S]*?\}/gi, '')
+        .replace(/<妄想>[\s\S]*?<\/妄想>/gi, '')
+        .trim();
     
     let messageHtml = '';
     if (thinkContent) {
@@ -1579,7 +1788,12 @@ function addMessage(content, role, source = '', toolResults = [], attachments = 
     if (imageHtml) {
         messageHtml += imageHtml;
     }
-    const processedContent = contentRenderer.smartRender(answerContent);
+    const processedContent = (typeof window.renderMarkdownWithCode === 'function')
+        ? window.renderMarkdownWithCode(answerContent)
+        : contentRenderer.smartRender(answerContent);
+    if (typeof window.renderMarkdownWithCode !== 'function') {
+        console.warn('[ChatPage] renderMarkdownWithCode not available, using fallback');
+    }
     messageHtml += `<div class="message-content">${processedContent}</div>`;
     
     messageDiv.innerHTML = `
@@ -1712,7 +1926,7 @@ const STORAGE_KEY = 'rag_agent_sessions';
  */
 async function loadSessions() {
     try {
-        const response = await fetch(`${API_BASE}/api/chat/sessions`);
+        const response = await fetch(`${API_BASE}/api/chat/sessions/`);
         if (response.ok) {
             sessions = await response.json();
         }
@@ -1720,10 +1934,16 @@ async function loadSessions() {
             await createNewSession();
         } else {
             for (const session of sessions) {
-                const msgResponse = await fetch(`${API_BASE}/api/chat/sessions/${session.id}`);
+                const msgResponse = await fetch(`${API_BASE}/api/chat/sessions/${session.id}/messages`);
                 if (msgResponse.ok) {
                     const data = await msgResponse.json();
                     session.messages = data.messages || [];
+                    if (!session.title && !session.name) {
+                        const firstUserMsg = session.messages.find(m => m.role === 'user');
+                        if (firstUserMsg) {
+                            session.title = firstUserMsg.content.substring(0, 20) + (firstUserMsg.content.length > 20 ? '...' : '');
+                        }
+                    }
                 } else {
                     session.messages = [];
                 }
@@ -1745,16 +1965,6 @@ async function loadSessions() {
  */
 async function saveSessions() {
     try {
-        for (const session of sessions) {
-            await fetch(`${API_BASE}/api/chat/sessions/${session.id}`, {
-                method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    title: session.title,
-                    messages: session.messages
-                })
-            });
-        }
     } catch (e) {
         console.error('保存会话失败:', e);
     }
@@ -1766,12 +1976,15 @@ async function saveSessions() {
  */
 async function createNewSession() {
     try {
-        const response = await fetch(`${API_BASE}/api/chat/sessions`, {
+        const response = await fetch(`${API_BASE}/api/chat/sessions/`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' }
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name: '新会话' })
         });
         if (response.ok) {
             const session = await response.json();
+            session.title = '新会话';
+            session.name = '新会话';
             sessions.unshift(session);
             currentSessionId = session.id;
             window.currentSessionId = session.id;
@@ -1779,25 +1992,16 @@ async function createNewSession() {
             clearChatMessages();
             AppRouter.navigate('chat', session.id, true);
             return session;
+        } else {
+            console.error('创建会话失败:', response.status);
+            alert('创建会话失败，请刷新页面重试');
+            return null;
         }
     } catch (e) {
         console.error('创建会话失败:', e);
+        alert('创建会话失败，请检查服务器是否运行');
+        return null;
     }
-    const session = {
-        id: 'session_' + Date.now(),
-        title: '新会话',
-        createdAt: Date.now(),
-        updatedAt: Date.now(),
-        messages: []
-    };
-    sessions.unshift(session);
-    currentSessionId = session.id;
-    window.currentSessionId = session.id;
-    saveSessions();
-    renderSessionList();
-    clearChatMessages();
-    AppRouter.navigate('chat', session.id, true);
-    return session;
 }
 
 /**
@@ -1806,7 +2010,7 @@ async function createNewSession() {
  */
 async function deleteSession(sessionId) {
     try {
-        await fetch(`${API_BASE}/api/chat/sessions/${sessionId}`, {
+        await fetch(`${API_BASE}/api/chat/sessions/${sessionId}/`, {
             method: 'DELETE'
         });
     } catch (e) {
@@ -1845,6 +2049,11 @@ function loadSessionMessages(sessionId) {
 
     const chatMessages = document.getElementById('chatMessages');
     chatMessages.innerHTML = '';
+
+    if (!session.messages || !Array.isArray(session.messages)) {
+        session.messages = [];
+        return;
+    }
 
     session.messages.forEach(msg => {
         if (msg.role === 'user') {
@@ -1939,9 +2148,19 @@ async function addMessageToSession(role, content, extra = {}) {
         let title = content.substring(0, 20);
         if (content.length > 20) title += '...';
         session.title = title;
+        session.name = title;
+
+        try {
+            await fetch(`${API_BASE}/api/chat/sessions/${session.id}/`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name: title })
+            });
+        } catch (e) {
+            console.error('更新会话名称失败:', e);
+        }
     }
 
-    await saveSessions();
     renderSessionList();
 }
 
@@ -1975,11 +2194,11 @@ function renderSessionList() {
     sessions.forEach(session => {
         const item = document.createElement('div');
         item.className = 'session-item' + (session.id === currentSessionId ? ' active' : '');
-        const tokenInfo = session.tokenUsage ? `<span class="session-item-tokens">🔥 ${session.tokenUsage.total}</span>` : '';
+        const title = session.title || session.name || '新会话';
+        const updatedAt = session.updatedAt || session.updated_at;
         item.innerHTML = `
-            <span class="session-item-title">${escapeHtml(session.title)}</span>
-            ${tokenInfo}
-            <span class="session-item-time">${formatTime(session.updatedAt)}</span>
+            <span class="session-item-title">${escapeHtml(title)}</span>
+            <span class="session-item-time">${formatTime(updatedAt)}</span>
             <button class="delete-session-btn" data-id="${session.id}">🗑️</button>
         `;
 
@@ -2016,111 +2235,145 @@ function clearChatMessages() {
  * @param {Object} data - 澄清请求数据
  */
 function handleClarification(data) {
-    console.log('[Frontend] Received clarification request:', data);
+    console.log('[Frontend] handleClarification 被调用!');
+    console.log('[Frontend] data type:', typeof data);
+    console.log('[Frontend] data:', data);
 
-    const clarificationData = data.clarification || data;
+    try {
+        const clarificationData = data.clarification || data;
+        console.log('[Frontend] clarificationData:', clarificationData);
 
-    pendingClarification = {
-        id: clarificationData.id || clarificationData.clarification_id,
-        message: clarificationData.question || '',
-        type: clarificationData.type || 'ask_clarification',
-        type_label: clarificationData.type_label || '',
-        options: clarificationData.options || [],
-        session_id: clarificationData.session_id,
-        originalQuery: clarificationData.originalQuery || '',
-        responses: clarificationData.responses || []
-    };
+        if (!clarificationData.question && !clarificationData.message) {
+            console.error('[Frontend] clarificationData 没有 question 或 message 字段!');
+            console.log('[Frontend] clarificationData keys:', Object.keys(clarificationData));
+        }
 
-    addMessageToSession('assistant', pendingClarification.message, {
-        isClarification: true,
-        clarificationType: pendingClarification.type,
-        clarificationOptions: pendingClarification.options,
-        clarificationId: pendingClarification.id,
-        originalQuery: pendingClarification.originalQuery
-    });
+        pendingClarification = {
+            id: clarificationData.id || clarificationData.clarification_id,
+            message: clarificationData.question || clarificationData.message || '',
+            type: clarificationData.type || 'ask_clarification',
+            type_label: clarificationData.type_label || '',
+            options: clarificationData.options || [],
+            session_id: clarificationData.session_id,
+            originalQuery: clarificationData.originalQuery || '',
+            responses: clarificationData.responses || []
+        };
 
-    const chatMessages = document.getElementById('chatMessages');
-    const messageDiv = document.createElement('div');
-    messageDiv.className = 'message assistant clarification';
+        console.log('[Frontend] pendingClarification 设置完成:', JSON.stringify(pendingClarification));
+        console.log('[Frontend] message 内容:', pendingClarification.message);
 
-    let optionsHtml = '';
-    if (pendingClarification.options && pendingClarification.options.length > 0) {
-        optionsHtml = `
-            <div class="clarification-wrapper">
+        addMessageToSession('assistant', pendingClarification.message, {
+            isClarification: true,
+            clarificationType: pendingClarification.type,
+            clarificationOptions: pendingClarification.options,
+            clarificationId: pendingClarification.id,
+            originalQuery: pendingClarification.originalQuery
+        });
+
+        const chatMessages = document.getElementById('chatMessages');
+        if (!chatMessages) {
+            console.error('[Frontend] chatMessages 元素不存在!');
+            return;
+        }
+
+        const messageDiv = document.createElement('div');
+        messageDiv.className = 'message assistant clarification';
+
+        let optionsHtml = '';
+        if (pendingClarification.options && pendingClarification.options.length > 0) {
+            optionsHtml = `
                 <div class="clarification-question">${escapeHtml(pendingClarification.message)}</div>
-                <div class="clarification-options">
+                <div class="clarification-toggle expanded" onclick="this.classList.toggle('expanded'); this.querySelector('.toggle-arrow').textContent = this.classList.contains('expanded') ? '▼' : '▶'; this.nextElementSibling.style.display = this.classList.contains('expanded') ? 'block' : 'none';">
+                    <span class="toggle-arrow">▼</span>
+                    <span class="toggle-text">选择选项</span>
+                </div>
+                <div class="clarification-options" style="display: block;">
                     ${pendingClarification.options.map((option, index) => {
                         const optionValue = typeof option === 'string' ? option : (option.value || option);
                         const optionLabel = typeof option === 'string' ? option : (option.label || option.value || option);
-                        const isOther = optionValue === '其他';
                         return `
-                            <label class="clarification-radio${isOther ? ' option-other' : ''}">
-                                <input type="radio" name="clarification-option" value="${escapeHtml(optionValue)}" data-option="${escapeHtml(optionValue)}" />
-                                <span class="radio-custom"></span>
-                                <span class="option-text">${escapeHtml(optionLabel)}</span>
-                                ${isOther ? '<input type="text" class="other-input" placeholder="请输入内容" style="margin-left: 8px; padding: 4px 8px; border: 1px solid #ddd; border-radius: 4px;" />' : ''}
-                            </label>
+                            <div class="option-item" data-option="${escapeHtml(optionValue)}">${String.fromCharCode(65 + index)}. ${escapeHtml(optionLabel)}</div>
                         `;
                     }).join('')}
                 </div>
-                <div class="clarification-actions" style="margin-top: 12px; text-align: right;">
-                    <button class="clarification-confirm-btn" style="padding: 8px 20px; background: #1890ff; color: white; border: none; border-radius: 4px; cursor: pointer;">确认</button>
+                <div class="clarification-input">
+                    <input type="text" class="clarification-response-input" placeholder="或输入您的回答..." />
+                    <button class="clarification-submit-btn">发送</button>
                 </div>
-            </div>
-        `;
-    } else {
-        optionsHtml = `
-            <div class="clarification-wrapper">
+            `;
+        } else {
+            optionsHtml = `
                 <div class="clarification-question">${escapeHtml(pendingClarification.message)}</div>
-            </div>
-        `;
-    }
+                <div class="clarification-input single">
+                    <input type="text" class="clarification-response-input" placeholder="请输入您的回答..." />
+                    <button class="clarification-submit-btn">发送</button>
+                </div>
+            `;
+        }
 
-    messageDiv.innerHTML = `<div class="message-content clarification-content">${optionsHtml}</div>`;
+        messageDiv.innerHTML = `<div class="message-content clarification-content">${optionsHtml}</div>`;
 
-    chatMessages.appendChild(messageDiv);
-    chatMessages.scrollTop = chatMessages.scrollHeight;
+        chatMessages.appendChild(messageDiv);
+        chatMessages.scrollTop = chatMessages.scrollHeight;
 
-    const radioOptions = document.querySelectorAll('input[name="clarification-option"]');
-    const otherLabel = document.querySelector('.option-other');
-    const otherInput = otherLabel ? otherLabel.querySelector('.other-input') : null;
-    const confirmBtn = document.querySelector('.clarification-confirm-btn');
+        console.log('[Frontend] 追问消息已添加到页面');
 
-    radioOptions.forEach(radio => {
-        radio.addEventListener('change', () => {
-            radioOptions.forEach(r => r.closest('.clarification-radio').classList.remove('selected'));
-            radio.closest('.clarification-radio').classList.add('selected');
+        const optionItems = messageDiv.querySelectorAll('.option-item');
+        const responseInput = messageDiv.querySelector('.clarification-response-input');
+        const submitBtn = messageDiv.querySelector('.clarification-submit-btn');
 
-            if (radio.dataset.option === '其他' && otherInput) {
-                otherInput.disabled = false;
-                otherInput.focus();
-                otherInput.style.border = '1px solid #ddd';
-            } else if (otherInput) {
-                otherInput.disabled = true;
-                otherInput.value = '';
-                otherInput.style.border = '1px solid #ddd';
-            }
+        optionItems.forEach(item => {
+            item.style.cursor = 'pointer';
+            item.addEventListener('click', () => {
+                optionItems.forEach(opt => opt.classList.remove('selected'));
+                item.classList.add('selected');
+            });
         });
-    });
 
-    if (confirmBtn) {
-        confirmBtn.addEventListener('click', () => {
-            const selectedRadio = document.querySelector('input[name="clarification-option"]:checked');
-            if (!selectedRadio) {
-                return;
-            }
+        if (submitBtn) {
+            submitBtn.addEventListener('click', () => {
+                const selectedItem = messageDiv.querySelector('.option-item.selected');
+                let response = '';
 
-            const option = selectedRadio.dataset.option;
-            if (option === '其他' && otherInput) {
-                if (!otherInput.value.trim()) {
-                    otherInput.style.border = '1px solid red';
+                if (selectedItem) {
+                    response = selectedItem.dataset.option;
+                }
+
+                if (!response && responseInput) {
+                    response = responseInput.value.trim();
+                }
+
+                if (!response) {
+                    if (responseInput) {
+                        responseInput.style.border = '1px solid #ef4444';
+                    }
                     return;
                 }
-                submitClarification(otherInput.value.trim());
-            } else {
-                submitClarification(option);
-            }
-        });
+
+                submitClarification(response);
+            });
+        }
+
+        if (responseInput) {
+            responseInput.addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') {
+                    submitBtn?.click();
+                }
+            });
+        }
+
+        if (responseInput) {
+            responseInput.addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') {
+                    submitBtn?.click();
+                }
+            });
+        }
+
+        console.log('[Frontend] handleClarification 完成');
+    } catch (e) {
+        console.error('[Frontend] handleClarification 执行出错:', e);
+        console.error('[Frontend] Error stack:', e.stack);
     }
 }
 
@@ -2129,6 +2382,11 @@ function handleClarification(data) {
  * @param {string} response - 用户响应内容
  */
 async function submitClarification(response) {
+    console.log('[Frontend] submitClarification 被调用!');
+    console.log('[Frontend] pendingClarification:', pendingClarification);
+    console.log('[Frontend] pendingClarification.id:', pendingClarification?.id);
+    console.log('[Frontend] _clarificationSubmitting:', window._clarificationSubmitting);
+
     if (!pendingClarification || window._clarificationSubmitting) {
         console.warn('[Frontend] No pending clarification or already submitting');
         return;
@@ -2152,7 +2410,7 @@ async function submitClarification(response) {
 
         const loadingId = showLoading();
 
-        const responseObj = await fetch(`${API_BASE}/api/chat`, {
+        const responseObj = await fetch(`${API_BASE}/api/chat/`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
@@ -2170,26 +2428,33 @@ async function submitClarification(response) {
         removeLoading(loadingId);
 
         const result = await responseObj.json();
-        console.log('[Frontend] Clarification response result:', result);
+        console.log('[Frontend] Clarification response result:', JSON.stringify(result));
+        console.log('[Frontend] Clarification result type:', result.type);
+        console.log('[Frontend] Clarification result keys:', Object.keys(result));
 
         if (result.type === 'clarification') {
+            console.log('[Frontend] 处理第二轮追问...');
             pendingClarification = {
                 id: result.clarification_id,
                 message: result.question,
                 type: result.type,
                 type_label: result.type_label || '',
                 options: result.options || [],
-                session_id: sessionId,
-                originalQuery: '',
+                session_id: currentSessionId,
+                originalQuery: result.originalQuery || '',
                 responses: []
             };
             handleClarification(result);
         } else if (result.content) {
+            console.log('[Frontend] 收到普通回复...');
             addMessage(result.content, 'assistant', result.source, result.toolResults || []);
             pendingClarification = null;
         } else if (result.error) {
+            console.log('[Frontend] 收到错误...');
             addMessage(`错误: ${result.error}`, 'assistant');
             pendingClarification = null;
+        } else {
+            console.log('[Frontend] 未处理的响应类型!');
         }
 
         window._clarificationSubmitting = false;

@@ -117,6 +117,22 @@ function containsMarkdownPatterns(str) {
   return patterns.some(pattern => pattern.test(str));
 }
 
+function getLanguageLabelForRenderer(lang) {
+  const labels = {
+    'js': 'JavaScript', 'javascript': 'JavaScript',
+    'ts': 'TypeScript', 'typescript': 'TypeScript',
+    'py': 'Python', 'python': 'Python',
+    'java': 'Java', 'json': 'JSON', 'yaml': 'YAML', 'yml': 'YAML',
+    'sql': 'SQL', 'html': 'HTML', 'css': 'CSS',
+    'sh': 'Shell', 'bash': 'Bash', 'shell': 'Shell',
+    'md': 'Markdown', 'markdown': 'Markdown',
+    'xml': 'XML', 'go': 'Go', 'rust': 'Rust', 'c': 'C',
+    'cpp': 'C++', 'c++': 'C++', 'php': 'PHP', 'rb': 'Ruby',
+    'code': '代码', '': '代码'
+  };
+  return labels[lang.toLowerCase()] || lang || '代码';
+}
+
 /**
  * 转义HTML特殊字符
  * @param {string} str - 待转义的字符串
@@ -140,49 +156,84 @@ function escapeHtml(str) {
 function parseMarkdown(text) {
   if (!text) return '';
 
-  let html = escapeHtml(text);
+  let html = '';
+  let i = 0;
+  const len = text.length;
 
-  html = html.replace(/```(\w*)\n([\s\S]*?)```/g, (match, lang, code) => {
-    return `<pre class="code-block" data-lang="${lang}"><code>${code.trim()}</code></pre>`;
-  });
+  while (i < len) {
+    if (text.substring(i, i + 3) === '```') {
+      const lineEnd = text.indexOf('\n', i);
+      const nextBacktick = text.indexOf('```', i + 3);
 
-  html = html.replace(/`([^`]+)`/g, '<code class="inline-code">$1</code>');
+      let lang = 'code';
+      if (lineEnd !== -1 && (nextBacktick === -1 || lineEnd < nextBacktick)) {
+        lang = text.substring(i + 3, lineEnd).trim() || 'code';
+      }
 
-  html = html.replace(/^### (.+)$/gm, '<h3>$1</h3>');
-  html = html.replace(/^## (.+)$/gm, '<h2>$1</h2>');
-  html = html.replace(/^# (.+)$/gm, '<h1>$1</h1>');
+      const closingTag = text.indexOf('```', i + 3);
 
-  html = html.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
-  html = html.replace(/__([^_]+)__/g, '<strong>$1</strong>');
-
-  html = html.replace(/\*([^*]+)\*/g, '<em>$1</em>');
-  html = html.replace(/_([^_]+)_/g, '<em>$1</em>');
-
-  html = html.replace(/^\s*[-*+]\s+(.+)$/gm, '<li>$1</li>');
-  html = html.replace(/(<li>.*<\/li>\n?)+/g, '<ul>$&</ul>');
-
-  html = html.replace(/^\s*\d+\.\s+(.+)$/gm, '<li>$1</li>');
-
-  html = html.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>');
-
-  html = html.replace(/^>\s+(.+)$/gm, '<blockquote>$1</blockquote>');
-
-  html = html.replace(/^---$/gm, '<hr>');
-
-  html = html.replace(/\n\n/g, '</p><p>');
-  html = '<p>' + html + '</p>';
-  html = html.replace(/<p><\/p>/g, '');
-  html = html.replace(/<p>(<h[1-6]>)/g, '$1');
-  html = html.replace(/(<\/h[1-6]>)<\/p>/g, '$1');
-  html = html.replace(/<p>(<pre)/g, '$1');
-  html = html.replace(/(<\/pre>)<\/p>/g, '$1');
-  html = html.replace(/<p>(<ul>)/g, '$1');
-  html = html.replace(/(<\/ul>)<\/p>/g, '$1');
-  html = html.replace(/<p>(<blockquote>)/g, '$1');
-  html = html.replace(/(<\/blockquote>)<\/p>/g, '$1');
-  html = html.replace(/<p>(<hr>)<\/p>/g, '$1');
+      if (closingTag !== -1) {
+        let codeContent = text.substring((lineEnd !== -1 ? lineEnd + 1 : i + 3), closingTag);
+        codeContent = escapeHtml(codeContent.trim());
+        const langLabel = getLanguageLabelForRenderer(lang);
+        html += `<div class="code-block-wrapper">
+          <div class="code-block-header">
+            <span class="code-lang">${langLabel}</span>
+            <div class="code-block-actions">
+              <button class="code-action-btn copy-btn" onclick="window.copyCode(this)">📋 复制</button>
+            </div>
+          </div>
+          <pre class="code-block"><code>${codeContent}</code></pre>
+        </div>`;
+        i = closingTag + 3;
+      } else {
+        let codeContent = text.substring((lineEnd !== -1 ? lineEnd + 1 : i + 3));
+        codeContent = escapeHtml(codeContent);
+        const langLabel = getLanguageLabelForRenderer(lang);
+        html += `<div class="code-block-wrapper">
+          <div class="code-block-header">
+            <span class="code-lang">${langLabel}</span>
+            <div class="code-block-actions">
+              <button class="code-action-btn copy-btn" onclick="window.copyCode(this)">📋 复制</button>
+            </div>
+          </div>
+          <pre class="code-block"><code>${codeContent}</code></pre>
+        </div>`;
+        i = len;
+      }
+    } else {
+      const textEnd = text.indexOf('```', i);
+      if (textEnd === -1) {
+        html += escapeAndFormatTextForRenderer(text.substring(i));
+        i = len;
+      } else {
+        html += escapeAndFormatTextForRenderer(text.substring(i, textEnd));
+        i = textEnd;
+      }
+    }
+  }
 
   return html;
+}
+
+function escapeAndFormatTextForRenderer(text) {
+  return text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/`([^`]+)`/g, '<code class="inline-code">$1</code>')
+    .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
+    .replace(/\*([^*]+)\*/g, '<em>$1</em>')
+    .replace(/^### (.+)$/gm, '<h3>$1</h3>')
+    .replace(/^## (.+)$/gm, '<h2>$1</h2>')
+    .replace(/^# (.+)$/gm, '<h1>$1</h1>')
+    .replace(/^\s*[-*+]\s+(.+)$/gm, '<li>$1</li>')
+    .replace(/^\s*\d+\.\s+(.+)$/gm, '<li>$1</li>')
+    .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>')
+    .replace(/^>\s+(.+)$/gm, '<blockquote>$1</blockquote>')
+    .replace(/^---$/gm, '<hr>')
+    .replace(/\n\n/g, '</p><p>')
+    .replace(/\n/g, '<br>');
 }
 
 /**
@@ -576,6 +627,10 @@ function smartRender(content, options = {}) {
     return renderText('无法渲染空内容');
   }
 
+  if (content.includes('```')) {
+    return renderMarkdown(content);
+  }
+
   const type = detectContentType(content);
 
   if (type === ContentType.JSON) {
@@ -584,6 +639,10 @@ function smartRender(content, options = {}) {
       return renderApiResponse(content);
     }
     return renderJson(content);
+  }
+
+  if (type === ContentType.MIXED) {
+    return renderMarkdown(content);
   }
 
   return render(content, options);

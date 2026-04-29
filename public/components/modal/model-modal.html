@@ -27,6 +27,14 @@
             </select>
         </div>
         <div class="form-group">
+            <label for="modalModelMultimodal">
+                <input type="checkbox" id="modalModelMultimodal">
+                支持图片理解（开启后可在对话中上传图片进行分析）
+            </label>
+            <button type="button" id="detectMultimodalBtn" class="detect-btn">自动检测</button>
+            <span id="detectMultimodalResult" class="detect-result"></span>
+        </div>
+        <div class="form-group">
             <label for="modalModelUrl">API URL</label>
             <input type="text" id="modalModelUrl" placeholder="请输入API URL，如: https://api.siliconflow.cn/v1">
         </div>

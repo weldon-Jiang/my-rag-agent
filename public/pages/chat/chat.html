@@ -8,19 +8,24 @@
         </div>
         <div class="chat-main">
             <div class="chat-top-controls">
-                <div class="mode-buttons">
+                <div class="mode-selector">
                     <label class="mode-radio">
-                        <input type="radio" name="mode" value="knowledge">
-                        <span>仅知识库</span>
+                        <input type="radio" name="mode" value="agent">
+                        <span>🤖 AI</span>
                     </label>
                     <label class="mode-radio">
-                        <input type="radio" name="mode" value="ai">
-                        <span>仅AI</span>
+                        <input type="radio" name="mode" value="knowledge">
+                        <span>📚 知识库</span>
                     </label>
                     <label class="mode-radio active">
                         <input type="radio" name="mode" value="hybrid" checked>
-                        <span>混合</span>
+                        <span>🔧 混合</span>
                     </label>
+                </div>
+                <div id="groupSelectWrapper" class="group-select-wrapper" style="display: none;">
+                    <select id="knowledgeGroupSelect" class="knowledge-group-select">
+                        <option value="">全部知识库</option>
+                    </select>
                 </div>
                 <div id="modelSelectWrapper"></div>
             </div>

@@ -18,7 +18,7 @@ function getApiBase() {
     console.log('[API] Using electronAPI port, base:', base);
     return base;
   }
-  const fallback = 'http://localhost:3031';
+  const fallback = 'http://localhost:3030';
   console.log('[API] Using fallback, base:', fallback);
   return fallback;
 }
@@ -90,15 +90,15 @@ async function del(url) {
 const api = {
   // 聊天相关
   chat: {
-    send: (message, options = {}) => post('/api/chat', { message, ...options }),
+    send: (message, options = {}) => post('/api/chat/', { message, ...options }),
     getHistory: (sessionId) => get(`/api/chat/history/${sessionId}`),
-    listSessions: () => get('/api/chat/sessions'),
-    deleteSession: (sessionId) => del(`/api/chat/session/${sessionId}`)
+    listSessions: () => get('/api/chat/sessions/'),
+    deleteSession: (sessionId) => del(`/api/chat/sessions/${sessionId}/`)
   },
 
   // 文件相关
   files: {
-    list: () => get('/api/files'),
+    list: () => get('/api/files/'),
     upload: (formData) => {
       const API_BASE = getApiBase();
       return fetch(`${API_BASE}/api/files/upload`, {
@@ -106,20 +106,20 @@ const api = {
         body: formData
       }).then(r => r.json());
     },
-    delete: (filename) => del(`/api/files/${encodeURIComponent(filename)}`)
+    delete: (filename) => del(`/api/files/${encodeURIComponent(filename)}/`)
   },
 
   // 技能相关
   skills: {
-    list: () => get('/api/skills'),
+    list: () => get('/api/skills/'),
     getByCategory: () => get('/api/skills/by-category')
   },
 
   // 模型相关
   models: {
-    list: () => get('/api/models'),
-    get: (id) => get(`/api/models/${id}`),
-    update: (id, config) => post(`/api/models/${id}`, config)
+    list: () => get('/api/models/'),
+    get: (id) => get(`/api/models/${id}/`),
+    update: (id, config) => post(`/api/models/${id}/`, config)
   },
 
   // 工具相关
