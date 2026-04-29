@@ -6,7 +6,10 @@ import json
 import uuid
 
 class SessionDatabase:
-    def __init__(self, db_path: str = "D:/chinatravel/my-rag-agent/data/sessions.db"):
+    def __init__(self, db_path: str = None):
+        from config import DATA_DIR
+        if db_path is None:
+            db_path = str(DATA_DIR / "sessions.db")
         Path(db_path).parent.mkdir(parents=True, exist_ok=True)
         self.db_path = db_path
         self.conn = sqlite3.connect(db_path, check_same_thread=False)

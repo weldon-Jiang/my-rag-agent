@@ -11,7 +11,10 @@ sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
 sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8')
 
 class VectorStore:
-    def __init__(self, persist_dir="D:/chinatravel/my-rag-agent/data/chroma_db"):
+    def __init__(self, persist_dir=None):
+        from config import DATA_DIR
+        if persist_dir is None:
+            persist_dir = str(DATA_DIR / "chroma_db")
         self.persist_dir = persist_dir
         os.makedirs(persist_dir, exist_ok=True)
 
@@ -129,7 +132,8 @@ def main():
             action = request.get('action')
 
             if action == 'init':
-                persist_dir = request.get('persist_dir', 'D:/chinatravel/my-rag-agent/data/chroma_db')
+                from config import DATA_DIR
+                persist_dir = request.get('persist_dir', str(DATA_DIR / "chroma_db"))
                 vector_store = VectorStore(persist_dir)
                 print(json.dumps({'status': 'ok', 'message': '初始化完成'}), flush=True)
 
