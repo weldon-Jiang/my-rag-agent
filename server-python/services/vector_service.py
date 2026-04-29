@@ -2,12 +2,13 @@ import chromadb
 from chromadb.config import Settings
 from typing import List, Dict, Any, Optional
 import os
+from pathlib import Path
 
 class VectorStore:
     def __init__(self, persist_dir: str = None):
         from config import DATA_DIR
         if persist_dir is None:
-            persist_dir = str(DATA_DIR / "chroma_db")
+            persist_dir = str(Path(DATA_DIR) / "chroma_db")
         self.persist_dir = persist_dir
         os.makedirs(persist_dir, exist_ok=True)
 

@@ -512,6 +512,7 @@ function setupEventListeners() {
 }
 
 window.currentMode = selectedMode;
+window.renderWarningShown = false;
 
 /**
  * 更新模式单选按钮的激活状态
@@ -1074,20 +1075,13 @@ function renderModelSelect(publishedModels) {
             <div class="models-dropdown-menu" id="modelDropdownMenu">
     `;
 
-    allProviders.forEach(provider => {
-        if (!groupedModels[provider]) return;
-
+    publishedModels.forEach(model => {
         html += `
-            <div class="model-group">
-                <div class="model-group-title">${provider}</div>
-                ${groupedModels[provider].map(model => `
-                    <div class="model-option ${model.id === selectedModel ? 'selected' : ''}"
-                         onclick="selectModel('${model.id}')">
-                        <input type="radio" name="model" value="${model.id}"
-                               ${model.id === selectedModel ? 'checked' : ''}>
-                        <span>${model.name}</span>
-                    </div>
-                `).join('')}
+            <div class="model-option ${model.id === selectedModel ? 'selected' : ''}"
+                 onclick="selectModel('${model.id}')">
+                <input type="radio" name="model" value="${model.id}"
+                       ${model.id === selectedModel ? 'checked' : ''}>
+                <span>${model.name}</span>
             </div>
         `;
     });
@@ -1791,8 +1785,9 @@ function addMessage(content, role, source = '', toolResults = [], attachments = 
     const processedContent = (typeof window.renderMarkdownWithCode === 'function')
         ? window.renderMarkdownWithCode(answerContent)
         : contentRenderer.smartRender(answerContent);
-    if (typeof window.renderMarkdownWithCode !== 'function') {
+    if (typeof window.renderMarkdownWithCode !== 'function' && !window.renderWarningShown) {
         console.warn('[ChatPage] renderMarkdownWithCode not available, using fallback');
+        window.renderWarningShown = true;
     }
     messageHtml += `<div class="message-content">${processedContent}</div>`;
     
@@ -2055,6 +2050,8 @@ function loadSessionMessages(sessionId) {
         return;
     }
 
+    const useFallbackRenderer = typeof window.renderMarkdownWithCode !== 'function';
+
     session.messages.forEach(msg => {
         if (msg.role === 'user') {
             if (msg.isClarificationResponse) {
@@ -2074,18 +2071,24 @@ function loadSessionMessages(sessionId) {
                 `;
                 chatMessages.insertAdjacentHTML('beforeend', clarificationHtml);
             } else {
-                addMessage(msg.content, 'user');
+                if (useFallbackRenderer) {
+                    const msgDiv = document.createElement('div');
+                    msgDiv.className = 'message user';
+                    msgDiv.innerHTML = `<div class="message-content">${escapeHtml(msg.content)}</div>`;
+                    chatMessages.appendChild(msgDiv);
+                } else {
+                    addMessage(msg.content, 'user');
+                }
             }
         } else if (msg.role === 'assistant') {
             if (msg.isClarification) {
-                const sourceLabels = {
-                    'AI': '🤖 AI助手',
-                    '知识库': '📚 知识库',
-                    '混合': '🔗 混合模式',
-                    'AI + Tools': '🔧 AI + 工具',
-                    '工具': '🔧 工具调用'
+                const modeIcons = {
+                    'knowledge': '📚',
+                    'agent': '🤖',
+                    'hybrid': '🔧'
                 };
-                const sourceLabel = sourceLabels[msg.source] || '';
+                const modeIcon = modeIcons[msg.source] || '';
+                const modeLabel = msg.source ? `${modeIcon} ${msg.source.toUpperCase()} 模式` : '';
                 let optionsHtml = '';
                 if (msg.clarificationOptions && msg.clarificationOptions.length > 0) {
                     optionsHtml = `
@@ -2104,8 +2107,8 @@ function loadSessionMessages(sessionId) {
                 }
                 const clarificationHtml = `
                     <div class="message assistant">
+                        ${modeLabel ? `<div class="mode-label">${modeLabel}</div>` : ''}
                         <div class="message-content">
-                            ${sourceLabel ? `<div class="message-source">${sourceLabel}</div>` : ''}
                             <div class="clarification-question">${escapeHtml(msg.content)}</div>
                             ${optionsHtml}
                         </div>
@@ -2113,7 +2116,27 @@ function loadSessionMessages(sessionId) {
                 `;
                 chatMessages.insertAdjacentHTML('beforeend', clarificationHtml);
             } else {
-                addMessage(msg.content, msg.source || 'assistant', msg.source, msg.knowledgeResults);
+                if (useFallbackRenderer) {
+                    const renderedContent = typeof contentRenderer !== 'undefined'
+                        ? contentRenderer.smartRender(msg.content)
+                        : escapeHtml(msg.content);
+                    const modeIcons = {
+                        'knowledge': '📚',
+                        'agent': '🤖',
+                        'hybrid': '🔧'
+                    };
+                    const modeIcon = modeIcons[msg.source] || '';
+                    const modeLabel = msg.source ? `${modeIcon} ${msg.source.toUpperCase()} 模式` : '';
+                    const msgDiv = document.createElement('div');
+                    msgDiv.className = 'message assistant';
+                    msgDiv.innerHTML = `
+                        ${modeLabel ? `<div class="mode-label">${modeLabel}</div>` : ''}
+                        <div class="message-content">${renderedContent}</div>
+                    `;
+                    chatMessages.appendChild(msgDiv);
+                } else {
+                    addMessage(msg.content, msg.source || 'assistant', msg.source, msg.knowledgeResults);
+                }
             }
         }
     });

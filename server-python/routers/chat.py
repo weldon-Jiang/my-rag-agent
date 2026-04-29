@@ -150,16 +150,17 @@ async def chat_stream(message: ChatMessage, request: Request):
         model_config = get_current_model_config()
 
     if message.session_id:
-        add_message_to_session(message.session_id, "user", message.message)
+        add_message_to_session(message.session_id, "user", message.message, {"source": message.mode})
 
     full_content = []
+    mode = message.mode
 
     async def generate():
         async for chunk in stream_chat_message(
             message=message.message,
             session_id=message.session_id,
             model_config=model_config,
-            mode=message.mode,
+            mode=mode,
             group_id=message.group_id
         ):
             full_content.append(chunk)
@@ -177,7 +178,7 @@ async def chat_stream(message: ChatMessage, request: Request):
                     except:
                         pass
                 if full_response:
-                    add_message_to_session(message.session_id, "assistant", full_response)
+                    add_message_to_session(message.session_id, "assistant", full_response, {"source": mode})
             except Exception as e:
                 print(f"[Chat Router] 保存会话消息失败: {e}")
 

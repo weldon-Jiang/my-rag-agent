@@ -5,6 +5,7 @@ from chromadb import PersistentClient
 from chromadb.config import Settings
 import os
 import io
+from pathlib import Path
 
 sys.stdin = io.TextIOWrapper(sys.stdin.buffer, encoding='utf-8')
 sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
@@ -14,7 +15,7 @@ class VectorStore:
     def __init__(self, persist_dir=None):
         from config import DATA_DIR
         if persist_dir is None:
-            persist_dir = str(DATA_DIR / "chroma_db")
+            persist_dir = str(Path(DATA_DIR) / "chroma_db")
         self.persist_dir = persist_dir
         os.makedirs(persist_dir, exist_ok=True)
 
@@ -133,7 +134,7 @@ def main():
 
             if action == 'init':
                 from config import DATA_DIR
-                persist_dir = request.get('persist_dir', str(DATA_DIR / "chroma_db"))
+                persist_dir = request.get('persist_dir', str(Path(DATA_DIR) / "chroma_db"))
                 vector_store = VectorStore(persist_dir)
                 print(json.dumps({'status': 'ok', 'message': '初始化完成'}), flush=True)
 
