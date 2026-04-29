@@ -61,47 +61,45 @@ async function loadData() {
 
 /**
  * 渲染技能列表
- * @param {Array} skillsByCategory - 按分类的技能数组
+ * @param {Object} skillsByCategory - 按分类的技能对象
  */
 function renderSkills(skillsByCategory) {
   const skillsList = document.getElementById('skillsList');
   if (!skillsList) return;
 
-  if (!skillsByCategory || !Array.isArray(skillsByCategory) || skillsByCategory.length === 0) {
+  if (!skillsByCategory || typeof skillsByCategory !== 'object') {
     skillsList.innerHTML = '<div class="empty-message">暂无技能数据</div>';
     return;
   }
 
+  const categoryNames = {
+    '系统技能': '⚙️ 系统技能',
+    '文件处理': '📦 文件处理',
+    '信息查询': '🔍 信息查询',
+    '用户交互': '💬 用户交互',
+    '系统操作': '🖥️ 系统操作',
+    'info': '🔍 信息查询',
+    'knowledge': '📚 知识库',
+    'search': '🌐 Web搜索'
+  };
+
   let html = '';
 
-  for (const category of skillsByCategory) {
-    if (!category || typeof category !== 'object') continue;
-    const name = category.name || '未分类';
-    const icon = category.icon || '📋';
-    html += `<div class="doc-category"><span class="category-label">${icon} ${escapeHtml(name)}</span></div>`;
+  for (const [categoryKey, categorySkills] of Object.entries(skillsByCategory)) {
+    if (!Array.isArray(categorySkills)) continue;
+    const categoryName = categoryNames[categoryKey] || categoryKey;
+    html += `<div class="doc-category"><span class="category-label">${escapeHtml(categoryName)}</span></div>`;
     html += '<div class="doc-items">';
 
-    let skills = category.skills;
-    if (!Array.isArray(skills)) {
-      if (typeof skills === 'object' && skills !== null) {
-        skills = Object.values(skills);
-      } else {
-        skills = [];
-      }
-    }
-    for (const skill of skills) {
+    for (const skill of categorySkills) {
       if (!skill || typeof skill !== 'object') continue;
-      const triggerText = Array.isArray(skill.trigger) ? skill.trigger.join(', ') : (skill.trigger || '自动触发');
-      const usageText = skill.usage || '';
-      const toolsText = Array.isArray(skill.tools) ? skill.tools.join(', ') : '';
+      const toolsText = Array.isArray(skill.tools) ? skill.tools.join(', ') : (skill.tools || '');
 
       html += `
         <div class="tool-doc">
           <h4>${escapeHtml(skill.name || 'Unknown')}</h4>
           <p>${escapeHtml(skill.description || '')}</p>
-          <p class="trigger-hint">触发: ${escapeHtml(triggerText)}</p>
-          <p class="usage-hint">用法: ${escapeHtml(usageText)}</p>
-          ${toolsText ? `<p class="tools-hint">工具: ${escapeHtml(toolsText)}</p>` : ''}
+          ${toolsText ? `<p><span class="usage-hint">工具: </span>${escapeHtml(toolsText)}</p>` : ''}
         </div>
       `;
     }
@@ -109,12 +107,12 @@ function renderSkills(skillsByCategory) {
     html += '</div>';
   }
 
-  skillsList.innerHTML = html;
+  skillsList.innerHTML = html || '<div class="empty-message">暂无技能数据</div>';
 }
 
 /**
  * 渲染工具列表
- * @param {Array} toolsWithDescriptions - 工具描述列表
+ * @param {Object} toolsWithDescriptions - 工具描述对象
  */
 function renderTools(toolsWithDescriptions) {
   const toolsList = document.getElementById('toolsList');
@@ -122,45 +120,27 @@ function renderTools(toolsWithDescriptions) {
 
   console.log('[SkillTools] toolsWithDescriptions:', toolsWithDescriptions);
 
-  if (!toolsWithDescriptions || !Array.isArray(toolsWithDescriptions) || toolsWithDescriptions.length === 0) {
+  if (!toolsWithDescriptions || typeof toolsWithDescriptions !== 'object') {
     toolsList.innerHTML = '<div class="empty-message">暂无工具数据</div>';
     return;
   }
 
   let html = '';
+  html += '<div class="doc-category"><span class="category-label">🛠️ 可用工具</span></div>';
+  html += '<div class="doc-items">';
 
-  for (const group of toolsWithDescriptions) {
-    if (!group || typeof group !== 'object') continue;
-    html += `<div class="doc-category"><span class="category-label">${escapeHtml(group.category || '未分类')}</span></div>`;
-    html += '<div class="doc-items">';
-
-    let tools = group.tools;
-    if (!Array.isArray(tools)) {
-      if (typeof tools === 'object' && tools !== null) {
-        tools = Object.values(tools);
-      } else {
-        tools = [];
-      }
-    }
-    for (const tool of tools) {
-      if (!tool || typeof tool !== 'object') continue;
-      const triggerText = Array.isArray(tool.trigger) ? tool.trigger.join(', ') : (tool.trigger || '');
-      const usageText = tool.usage || '';
-
-      html += `
-        <div class="tool-doc">
-          <h4>${escapeHtml(tool.name || 'Unknown')}</h4>
-          <p>${escapeHtml(tool.description || '')}</p>
-          <p class="trigger-hint">触发: ${escapeHtml(triggerText)}</p>
-          <p class="usage-hint">用法: ${escapeHtml(usageText)}</p>
-        </div>
-      `;
-    }
-
-    html += '</div>';
+  for (const [toolName, toolDesc] of Object.entries(toolsWithDescriptions)) {
+    html += `
+      <div class="tool-doc">
+        <h4>${escapeHtml(toolName)}</h4>
+        <p>${escapeHtml(toolDesc)}</p>
+      </div>
+    `;
   }
 
-  toolsList.innerHTML = html;
+  html += '</div>';
+
+  toolsList.innerHTML = html || '<div class="empty-message">暂无工具数据</div>';
 }
 
 /**

@@ -120,13 +120,18 @@ async function navigateTo(page, forceReload = false) {
   }
 
   // 调用页面初始化函数
-  const initFn = pageCache[page]?.init;
+  console.log('[Router] pageCache[page]:', pageCache[page]);
+  console.log('[Router] window.knowledgePage:', window.knowledgePage);
+  const initFn = pageCache[page]?.init || window[pageIdMap[page]]?.init;
   if (initFn && typeof initFn === 'function') {
     try {
+      console.log('[Router] 调用页面初始化函数:', page);
       initFn();
     } catch (e) {
       console.error(`[Router] 页面初始化失败: ${page}`, e);
     }
+  } else {
+    console.warn('[Router] 页面初始化函数未找到:', page, pageIdMap[page]);
   }
 
   // 页面特定逻辑
@@ -190,8 +195,9 @@ async function loadPageModule(page, forceReload = false) {
       const mod = modulePath.startsWith('/') ? modulePath : '/' + modulePath;
       importPath = 'file://' + base + mod;
     }
-    console.log(`[Router] 正在加载页面模块: ${page}, 路径: ${importPath}`);
+    console.log(`[Router] 开始导入: ${importPath}`);
     const module = await import(importPath + '?t=' + Date.now());
+    console.log(`[Router] 模块导入成功: ${page}`, 'module keys:', Object.keys(module));
 
     const pageIdMap = {
       'skill-tools': 'skillToolsPage',
@@ -201,7 +207,13 @@ async function loadPageModule(page, forceReload = false) {
     };
     const windowKey = pageIdMap[page] || `${page}Page`;
 
-    if (!module.default || Object.keys(module).length === 0) {
+    if (module.default) {
+      pageCache[page] = module.default;
+      window[windowKey] = module.default;
+      return module.default;
+    }
+
+    if (Object.keys(module).length === 0) {
       if (window[windowKey]) {
         pageCache[page] = window[windowKey];
         return pageCache[page];

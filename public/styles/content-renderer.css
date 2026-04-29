@@ -87,10 +87,10 @@
 /* 代码块样式 */
 .code-block {
     background: #1e1e1e;
-    border-radius: 8px;
+    border-radius: 0;
     padding: 1rem;
-    margin: 0.5rem 0;
-    overflow-x: auto;
+    margin: 0;
+    overflow: visible;
     position: relative;
 }
 
@@ -98,17 +98,75 @@
     font-family: 'Fira Code', 'Consolas', 'Monaco', monospace;
     font-size: 0.9rem;
     color: #d4d4d4;
-    white-space: pre;
+    white-space: pre-wrap;
+    word-break: break-all;
 }
 
 .code-block::before {
-    content: attr(data-lang);
-    position: absolute;
-    top: 0.5rem;
-    right: 0.5rem;
-    font-size: 0.75rem;
-    color: #888;
+    display: none;
+}
+
+/* 代码块包装器 */
+.code-block-wrapper {
+    position: relative;
+    margin: 0.8rem 0;
+    border-radius: 10px;
+    overflow: hidden;
+    background: #1e1e1e;
+    border: 1px solid #3d3d3d;
+}
+
+.code-block-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 12px;
+    background: #2d2d2d;
+    border-bottom: 1px solid #3d3d3d;
+}
+
+.code-lang {
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: #667eea;
     text-transform: uppercase;
+}
+
+.code-block-actions {
+    display: flex;
+    gap: 8px;
+}
+
+.code-action-btn {
+    background: #3d3d3d;
+    border: none;
+    color: #aaa;
+    padding: 4px 10px;
+    border-radius: 4px;
+    font-size: 0.75rem;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.code-action-btn:hover {
+    background: #4d4d4d;
+    color: #fff;
+}
+
+.code-action-btn.copy-btn.copied {
+    background: #28a745;
+    color: white;
+}
+
+.code-block-wrapper .code-block {
+    margin: 0;
+    border-radius: 0;
+    border: none;
+    max-height: none;
+}
+
+.code-block-wrapper.streaming .code-block code::after {
+    content: '';
 }
 
 /* 内联代码样式 */

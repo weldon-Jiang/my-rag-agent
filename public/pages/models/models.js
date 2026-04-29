@@ -135,7 +135,11 @@ function openEditModelModal(modelId, models) {
 
   title.textContent = '编辑模型';
   nameInput.value = model.name || '';
-  idInput.value = model.modelId || model.id || '';
+  idInput.value = model.id || '';
+  idInput.readOnly = true;
+  if (model.modelId) {
+    idInput.value = model.modelId;
+  }
   typeSelect.value = model.type || 'chat';
   protocolSelect.value = model.protocol || 'openai';
   urlInput.value = model.url || '';

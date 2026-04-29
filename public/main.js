@@ -19,8 +19,12 @@ function initApp() {
   // 设置全局错误处理
   setupErrorHandling();
 
-  // 加载默认页面
-  window.router.navigateTo('chat');
+  // 使用 AppRouter 加载默认页面
+  if (window.AppRouter) {
+    const page = AppRouter.getPageFromPath();
+    const sessionId = AppRouter.getSessionIdFromUrl();
+    AppRouter.navigate(page, sessionId, true);
+  }
 
   console.log('[Main] 应用初始化完成');
 }
@@ -31,9 +35,10 @@ function initApp() {
 function setupNavigation() {
   document.querySelectorAll('.menu-item').forEach(item => {
     item.addEventListener('click', (e) => {
+      e.preventDefault();
       const page = e.currentTarget.dataset.page;
-      if (page) {
-        window.router.navigateTo(page);
+      if (page && window.AppRouter) {
+        AppRouter.navigate(page);
       }
     });
   });
