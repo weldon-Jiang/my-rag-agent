@@ -52,7 +52,7 @@ async def stream_chat_message(
     from services.ai_service import get_recent_messages
 
     recent_history = []
-    if session_id:
+    if session_id and mode in ["ai", "agent", "hybrid"]:
         recent_history = await get_recent_messages(session_id, limit=6)
 
     if mode == "knowledge":

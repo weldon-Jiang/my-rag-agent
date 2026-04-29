@@ -4,7 +4,10 @@ from typing import List, Dict, Any, Optional
 import os
 
 class VectorStore:
-    def __init__(self, persist_dir: str = "D:/chinatravel/my-rag-agent/data/chroma_db"):
+    def __init__(self, persist_dir: str = None):
+        from config import DATA_DIR
+        if persist_dir is None:
+            persist_dir = str(DATA_DIR / "chroma_db")
         self.persist_dir = persist_dir
         os.makedirs(persist_dir, exist_ok=True)
 
