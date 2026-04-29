@@ -9,7 +9,7 @@ class KnowledgeDatabase:
     def __init__(self, db_path: str = None):
         from config import DATA_DIR
         if db_path is None:
-            db_path = str(DATA_DIR / "knowledge.db")
+            db_path = str(Path(DATA_DIR) / "knowledge.db")
         Path(db_path).parent.mkdir(parents=True, exist_ok=True)
         self.db_path = db_path
         self.conn = sqlite3.connect(db_path, check_same_thread=False)
@@ -122,10 +122,15 @@ class KnowledgeDatabase:
         return False
 
     def delete_group(self, group_id: str) -> bool:
-        self.conn.execute(
-            "UPDATE knowledge_groups SET is_active = 0 WHERE id = ?",
-            (group_id,)
-        )
+        import shutil
+        from config import KNOWLEDGE_DIR
+
+        group_dir = os.path.join(KNOWLEDGE_DIR, group_id)
+        if os.path.exists(group_dir):
+            shutil.rmtree(group_dir)
+
+        self.conn.execute("DELETE FROM knowledge_files WHERE group_id = ?", (group_id,))
+        self.conn.execute("DELETE FROM knowledge_groups WHERE id = ?", (group_id,))
         self.conn.commit()
         return True
 

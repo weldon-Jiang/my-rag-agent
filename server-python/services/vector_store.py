@@ -117,7 +117,7 @@ async def index_file(file_path: Path, group_id: str = None) -> int:
             "path": str(file_path),
             "chunk_index": i,
             "doc_id": doc_id,
-            "group_id": group_id or "default"
+            "group_id": group_id if group_id else "ALL"
         } for i in range(len(chunks))]
 
         collection.upsert(
@@ -216,7 +216,10 @@ async def semantic_search(query: str, top_k: int = 5, group_id: str = None) -> L
         embed_func = get_embedding_function()
         query_embedding = embed_func([query])[0]
 
-        where_filter = {"group_id": group_id} if group_id else None
+        if group_id:
+            where_filter = {"group_id": group_id}
+        else:
+            where_filter = {"group_id": "ALL"}
 
         results = collection.query(
             query_embeddings=[query_embedding],

@@ -1,5 +1,5 @@
 from fastapi import APIRouter, HTTPException
-from typing import List
+from typing import List, Dict
 
 from models.schemas import SessionResponse, SessionCreate
 from services.session_db import (
@@ -99,16 +99,27 @@ async def get_session_messages(session_id: str, limit: int = 50):
         raise HTTPException(status_code=404, detail="Session not found")
 
     messages = db_get_messages(session_id, limit)
-    return {"session_id": session_id, "messages": messages}
+    result = []
+    for m in messages:
+        msg_dict = {"role": m["role"], "content": m["content"], "timestamp": str(m["timestamp"])}
+        if m.get("metadata") and isinstance(m["metadata"], dict):
+            if "source" in m["metadata"]:
+                msg_dict["source"] = m["metadata"]["source"]
+        result.append(msg_dict)
+    return {"session_id": session_id, "messages": result}
 
 
-def add_message_to_session(session_id: str, role: str, content: str):
-    return db_add_message(session_id, role, content)
+def add_message_to_session(session_id: str, role: str, content: str, metadata: Dict = None):
+    return db_add_message(session_id, role, content, metadata)
 
 
 def get_session_messages_list(session_id: str, limit: int = 20):
     messages = db_get_messages(session_id, limit)
-    return [
-        {"role": m["role"], "content": m["content"], "timestamp": str(m["timestamp"])}
-        for m in messages
-    ]
+    result = []
+    for m in messages:
+        msg_dict = {"role": m["role"], "content": m["content"], "timestamp": str(m["timestamp"])}
+        if m.get("metadata") and isinstance(m["metadata"], dict):
+            if "source" in m["metadata"]:
+                msg_dict["source"] = m["metadata"]["source"]
+        result.append(msg_dict)
+    return result

@@ -95,7 +95,8 @@ async def search_knowledge_base(query: str, max_results: int = 5, group_id: str 
                 }
 
         from services.knowledge_db import get_files_by_group
-        files = get_files_by_group(group_id) if group_id else []
+        search_group = group_id if group_id else 'ALL'
+        files = get_files_by_group(search_group)
         if not files:
             files = [{"filename": f.name, "file_path": str(f)} for f in KNOWLEDGE_DIR.glob("*") if f.is_file() and f.suffix in ['.txt', '.md']]
 
