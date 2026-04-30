@@ -121,11 +121,15 @@ async def reindex_knowledge(background_tasks: BackgroundTasks, group_id: str = N
 
     def do_reindex():
         from services.vector_store import index_knowledge_base, init_vector_store
+
+        def progress_callback(msg):
+            _reindex_status["progress"] = msg
+
         _reindex_status["running"] = True
         _reindex_status["progress"] = "正在初始化..."
         init_vector_store()
         _reindex_status["progress"] = "正在索引文件..."
-        result = asyncio.run(index_knowledge_base(group_id))
+        result = asyncio.run(index_knowledge_base(group_id, progress_callback))
         _reindex_status["running"] = False
         _reindex_status["result"] = result
         _reindex_status["progress"] = "完成"

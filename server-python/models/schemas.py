@@ -61,6 +61,7 @@ class ModelInfo(BaseModel):
     modelId: Optional[str] = None
     apiKey: Optional[str] = None
     published: bool = True
+    provider: Optional[str] = None
 
 
 class ModelSwitch(BaseModel):

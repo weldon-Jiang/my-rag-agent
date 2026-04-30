@@ -981,8 +981,8 @@ button:hover {
 
 .upload-card, .files-card, .tools-card {
     background: var(--bg-card);
-    border-radius: 12px;
-    padding: 15px;
+    border-radius: 14px;
+    padding: 18px;
     box-shadow: var(--shadow-card);
 }
 
@@ -1106,10 +1106,9 @@ button:hover {
 }
 
 .index-card {
-    margin-top: 15px;
-    padding: 15px;
+    padding: 18px;
     background: var(--bg-secondary);
-    border-radius: 8px;
+    border-radius: 14px;
 }
 
 .index-status {
@@ -1189,10 +1188,9 @@ button:hover {
 }
 
 .groups-card {
-    padding: 15px;
+    padding: 18px;
     background: var(--bg-secondary);
-    border-radius: 8px;
-    margin-bottom: 15px;
+    border-radius: 14px;
 }
 
 .groups-card h3 {
@@ -1294,13 +1292,13 @@ button:hover {
 }
 
 .modal {
+    display: none;
     position: fixed;
     top: 0;
     left: 0;
     width: 100%;
     height: 100%;
     background: rgba(0, 0, 0, 0.5);
-    display: flex;
     justify-content: center;
     align-items: center;
     z-index: 1000;
@@ -1362,7 +1360,8 @@ button:hover {
 }
 
 .form-group input,
-.form-group textarea {
+.form-group textarea,
+.form-group select {
     width: 100%;
     padding: 8px 12px;
     border: 1px solid var(--border-color);
@@ -1370,6 +1369,16 @@ button:hover {
     background: var(--bg-secondary);
     color: var(--text-primary);
     font-size: 0.9rem;
+    box-sizing: border-box;
+}
+
+.form-group select {
+    cursor: pointer;
+    appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%235a5a7a' d='M6 8L1 3h10z'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 10px center;
+    padding-right: 30px;
 }
 
 .form-group textarea {
@@ -1733,6 +1742,45 @@ button:hover {
     min-height: 0;
 }
 
+.models-section {
+    margin-bottom: 32px;
+}
+
+.models-section-title {
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: 16px;
+    padding-bottom: 8px;
+    border-bottom: 2px solid var(--border-color);
+}
+
+.embedding-section {
+    background: var(--bg-secondary);
+    padding: 16px;
+    border-radius: 12px;
+}
+
+.embedding-section .models-section-title {
+    color: #d97706;
+    border-bottom-color: #d97706;
+}
+
+.models-section-desc {
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+    margin-bottom: 12px;
+}
+
+.no-models {
+    color: var(--text-secondary);
+    font-size: 0.9rem;
+    padding: 16px;
+    text-align: center;
+    background: var(--bg-secondary);
+    border-radius: 8px;
+}
+
 .model-card {
     background: var(--bg-card);
     border: 1px solid var(--border-color);
@@ -1810,6 +1858,50 @@ button:hover {
     background: #ee5a5a;
 }
 
+.model-card-actions .set-embedding-btn {
+    background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+    color: white;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.model-card-actions .set-embedding-btn:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(245, 158, 11, 0.4);
+}
+
+.model-card-actions .remove-embedding-btn {
+    background: #6b7280;
+    color: white;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.model-card-actions .remove-embedding-btn:hover {
+    background: #4b5563;
+}
+
+.no-embedding-model {
+    text-align: center;
+    padding: 24px;
+    color: var(--text-secondary);
+    background: var(--bg-secondary);
+    border-radius: 8px;
+}
+
+.no-embedding-model p {
+    margin: 8px 0;
+}
+
+.embedding-hint {
+    font-size: 0.85rem;
+    color: var(--text-tertiary, #9ca3af);
+}
+
 .model-card-details {
     color: var(--text-secondary);
     font-size: 0.85rem;
@@ -1833,6 +1925,49 @@ button:hover {
 .publish-status.unpublished {
     background: var(--progress-error-bg);
     color: #721c24;
+}
+
+.model-badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-size: 0.7rem;
+    font-weight: 500;
+}
+
+.embedding-badge {
+    background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+    color: white;
+}
+
+.model-type-label {
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 0.8rem;
+}
+
+.model-type-label.type-chat {
+    background: rgba(102, 126, 234, 0.15);
+    color: #667eea;
+}
+
+.model-type-label.type-embedding {
+    background: rgba(245, 158, 11, 0.15);
+    color: #d97706;
+}
+
+.set-embedding-btn {
+    background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+    color: white;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.set-embedding-btn:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(245, 158, 11, 0.4);
 }
 
 .multimodal-yes {
@@ -2024,7 +2159,7 @@ button:hover {
 }
 
 .modal .modal-content {
-    background: white;
+    background: var(--bg-card);
     border-radius: 12px;
     padding: 25px;
     width: 90%;
@@ -2167,19 +2302,6 @@ button:hover {
     padding: 10px 24px;
     border-radius: 6px;
     font-size: 0.9rem;
-}
-
-.modal {
-    display: none;
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    background: rgba(0, 0, 0, 0.5);
-    z-index: 9999;
-    justify-content: center;
-    align-items: center;
 }
 
 .modal.open {
@@ -2433,6 +2555,7 @@ button:hover {
     display: flex;
     gap: 16px;
     flex-shrink: 0;
+    align-items: stretch;
 }
 
 .knowledge-card {
@@ -2443,19 +2566,27 @@ button:hover {
     border: 1px solid var(--border-color);
     display: flex;
     flex-direction: column;
+    align-items: stretch;
+    align-self: stretch;
 }
 
-.index-card, .groups-card {
+.index-card, .groups-card, .upload-card {
     flex: 1;
-}
-
-.upload-card {
-    flex: 1.2;
+    min-height: 200px;
 }
 
 .files-card {
     flex: 1;
-    min-height: 250px;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    min-height: auto;
+    margin-top: 16px;
+}
+
+.files-card .file-list {
+    flex: 1;
+    overflow-y: auto;
 }
 
 .card-header {
