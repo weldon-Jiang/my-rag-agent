@@ -1,5 +1,6 @@
-from fastapi import APIRouter, HTTPException
-from typing import List, Dict
+from fastapi import APIRouter, HTTPException, Body
+from typing import List, Dict, Optional
+from pydantic import BaseModel
 
 from models.schemas import SessionResponse, SessionCreate
 from services.session_db import (
@@ -105,15 +106,40 @@ async def get_session_messages(session_id: str, limit: int = 50):
         if m.get("metadata") and isinstance(m["metadata"], dict):
             if "source" in m["metadata"]:
                 msg_dict["source"] = m["metadata"]["source"]
+            if "thinking" in m["metadata"]:
+                msg_dict["thinking"] = m["metadata"]["thinking"]
+            if "tools" in m["metadata"]:
+                msg_dict["tools"] = m["metadata"]["tools"]
         result.append(msg_dict)
     return {"session_id": session_id, "messages": result}
 
 
+class MessageCreate(BaseModel):
+    role: str
+    content: str
+    metadata: Optional[Dict] = None
+
+
+@router.post("/{session_id}/messages")
+async def add_session_message(session_id: str, message: MessageCreate):
+    """添加消息到会话"""
+    session = db_get_session(session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    add_message_to_session(session_id, message.role, message.content, message.metadata)
+    return {"success": True}
+
+
 def add_message_to_session(session_id: str, role: str, content: str, metadata: Dict = None):
-    return db_add_message(session_id, role, content, metadata)
+    print(f"[Session] 添加消息 - session: {session_id}, role: {role}, content长度: {len(content)}")
+    result = db_add_message(session_id, role, content, metadata)
+    print(f"[Session] 消息已保存")
+    return result
 
 
 def get_session_messages_list(session_id: str, limit: int = 20):
+    print(f"[Session] 获取会话消息 - session: {session_id}, limit: {limit}")
     messages = db_get_messages(session_id, limit)
     result = []
     for m in messages:
@@ -121,5 +147,10 @@ def get_session_messages_list(session_id: str, limit: int = 20):
         if m.get("metadata") and isinstance(m["metadata"], dict):
             if "source" in m["metadata"]:
                 msg_dict["source"] = m["metadata"]["source"]
+            if "thinking" in m["metadata"]:
+                msg_dict["thinking"] = m["metadata"]["thinking"]
+            if "tools" in m["metadata"]:
+                msg_dict["tools"] = m["metadata"]["tools"]
         result.append(msg_dict)
+    print(f"[Session] 返回 {len(result)} 条消息")
     return result

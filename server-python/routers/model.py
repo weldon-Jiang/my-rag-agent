@@ -56,13 +56,19 @@ def initialize_models():
             existing_id = str(uuid.uuid4())
             model["id"] = existing_id
 
+        model_url = model.get("url", "")
+    
+        # if model_id == "MiniMax-M2.7" and "pai-eas.aliyuncs.com" in model_url:
+        #     print(f"[Model] 检测到 MiniMax-M2.7 使用阿里云PAI-EAS URL，改为使用官方API")
+        #     model_url = "https://api.minimax.chat/v1"
+    
         MODELS[model_id] = {
             "id": existing_id,
             "name": model.get("name", model_id),
             "protocol": model.get("protocol", "openai"),
             "supports_multimodal": model.get("supports_multimodal", False),
             "description": model.get("description", ""),
-            "url": model.get("url", ""),
+            "url": model_url,
             "modelId": model_id,
             "apiKey": model.get("apiKey", ""),
             "published": model.get("published", True),

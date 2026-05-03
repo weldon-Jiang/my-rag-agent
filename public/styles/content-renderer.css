@@ -362,28 +362,6 @@
     gap: 0.5rem;
 }
 
-/* 思考过程样式增强 */
-.message-thinking {
-    background: var(--progress-bg);
-    border-radius: 8px;
-    padding: 0.8rem 1rem;
-    margin-bottom: 0.5rem;
-    font-size: 0.85rem;
-}
-
-.think-label {
-    font-weight: 600;
-    color: #667eea;
-    margin-bottom: 0.3rem;
-    font-size: 0.8rem;
-}
-
-.think-content {
-    color: var(--text-secondary);
-    max-height: 200px;
-    overflow-y: auto;
-}
-
 /* 消息内容增强 */
 .message-content {
     line-height: 1.6;
@@ -485,12 +463,4 @@
 
 [data-theme="dark"] .api-field .field-value {
     color: #a5d6ff;
-}
-
-[data-theme="dark"] .message-thinking {
-    background: var(--progress-bg);
-}
-
-[data-theme="dark"] .think-content {
-    color: #a0a0a0;
 }

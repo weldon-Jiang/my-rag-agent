@@ -8,6 +8,7 @@ class ChatMode(str, Enum):
     HYBRID = "hybrid"
     AGENT = "agent"
     KNOWLEDGE = "knowledge"
+    AI = "ai"
 
 
 class ChatMessage(BaseModel):

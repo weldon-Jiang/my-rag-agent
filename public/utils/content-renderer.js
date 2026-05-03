@@ -434,9 +434,10 @@ function renderMessage(messageData) {
   let html = '';
 
   if (thinking) {
-    html += `<div class="message-thinking">
-      <div class="think-label">思考过程：</div>
-      <div class="think-content">${render(thinking)}</div>
+    html += `<div class="thinking-area thinking-complete" onclick="this.classList.toggle('expanded');">
+      <div class="thinking-indicator">
+        <span class="thinking-text">${escapeHtml(thinking)}</span>
+      </div>
     </div>`;
   }
 

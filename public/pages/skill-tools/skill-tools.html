@@ -1,14 +1,54 @@
 <div id="skillToolsPage" class="page">
-    <div class="skill-tools-tabs">
-        <button class="tab-btn active" data-tab="skills">📦 技能</button>
-        <button class="tab-btn" data-tab="tools">🛠️ 工具</button>
-    </div>
-    <div class="skill-tools-container">
-        <div class="tab-content active" id="skillsTab">
-            <div class="skill-list" id="skillsList"></div>
+    <div class="page-header">
+        <h2>🛠️ 技能管理</h2>
+        <div class="skill-stats" id="skillStats">
+            <div class="stat-item">
+                <span class="stat-value" id="statInstalled">0</span>
+                <span class="stat-label">已安装</span>
+            </div>
+            <div class="stat-item">
+                <span class="stat-value" id="statEnabled">0</span>
+                <span class="stat-label">已启用</span>
+            </div>
+            <div class="stat-item">
+                <span class="stat-value" id="statMarketplace">0</span>
+                <span class="stat-label">市场技能</span>
+            </div>
         </div>
-        <div class="tab-content" id="toolsTab">
-            <div class="tool-list" id="toolsList"></div>
+    </div>
+
+    <div class="skill-tools-tabs">
+        <button class="tab-btn active" data-tab="installed">📦 已安装</button>
+        <button class="tab-btn" data-tab="marketplace">🏪 技能市场</button>
+    </div>
+
+    <div class="skill-tools-container">
+        <div class="tab-content active" id="installedTab">
+            <div id="installedSkillsList" class="skill-list"></div>
+        </div>
+        <div class="tab-content" id="marketplaceTab">
+            <div class="marketplace-toolbar">
+                <div class="search-box">
+                    <input type="text" id="skillSearchInput" placeholder="搜索技能..." onkeyup="handleSearch(event)">
+                    <button class="search-btn" onclick="searchSkills()">🔍</button>
+                </div>
+                <div class="source-filters">
+                    <button class="source-filter-btn active" data-source="all">全部</button>
+                    <button class="source-filter-btn" data-source="local">📦 本地</button>
+                    <button class="source-filter-btn" data-source="remote">🌐 远程</button>
+                </div>
+                <div class="remote-marketplace">
+                    <button class="remote-btn" id="remoteBtn" onclick="toggleRemoteMarketplace()">
+                        🌐 远程市场
+                    </button>
+                    <span class="remote-status" id="remoteStatus"></span>
+                </div>
+                <button class="refresh-btn" onclick="loadMarketplace()">🔄 刷新</button>
+            </div>
+            <div class="marketplace-hint" id="marketplaceHint">
+                点击"安装"按钮将技能添加到你的智能体
+            </div>
+            <div id="marketplaceSkillsList" class="skill-list"></div>
         </div>
     </div>
 </div>

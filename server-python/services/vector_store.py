@@ -4,6 +4,7 @@ from pathlib import Path
 from typing import List, Dict, Any, Optional
 import hashlib
 import httpx
+import asyncio
 
 KNOWLEDGE_DIR = Path(__file__).resolve().parent.parent.parent / "knowledge"
 VECTOR_DB_DIR = Path(__file__).resolve().parent.parent.parent / "data" / "vector_db"
@@ -223,8 +224,13 @@ async def index_file(file_path: Path, group_id: str = None) -> int:
 
 async def index_knowledge_base(group_id: str = None, progress_callback=None):
     """索引知识库文件，可选按分组索引"""
+    print(f"[VectorStore] ==============================================")
+    print(f"[VectorStore] 开始索引知识库")
+    print(f"[VectorStore] 分组ID: {group_id if group_id else '全部'}")
+    
     collection = get_collection()
     if collection is None:
+        print(f"[VectorStore] ❌ 向量存储未初始化，索引失败")
         return {"success": False, "error": "向量存储未初始化"}
 
     indexed_count = 0
@@ -232,6 +238,7 @@ async def index_knowledge_base(group_id: str = None, progress_callback=None):
     failed_files = 0
 
     def update_progress(msg):
+        print(f"[VectorStore] 进度: {msg}")
         if progress_callback:
             progress_callback(msg)
 
@@ -239,40 +246,79 @@ async def index_knowledge_base(group_id: str = None, progress_callback=None):
         files_to_index = []
 
         if group_id:
+            print(f"[VectorStore] 按分组索引: {group_id}")
             from services.knowledge_db import get_files_by_group
             files = get_files_by_group(group_id)
+            print(f"[VectorStore] 从分组获取到 {len(files)} 个文件")
             for f in files:
                 file_path = Path(f['file_path'])
                 if file_path.exists():
                     files_to_index.append((file_path, group_id))
+                    print(f"[VectorStore]   + {file_path.name}")
+                else:
+                    print(f"[VectorStore]   - {file_path.name} (文件不存在)")
         else:
-            for file_path in KNOWLEDGE_DIR.glob("*"):
+            print(f"[VectorStore] 索引全部知识库文件")
+            print(f"[VectorStore] 知识库目录: {KNOWLEDGE_DIR}")
+            files_found = list(KNOWLEDGE_DIR.glob("*"))
+            print(f"[VectorStore] 目录中共找到 {len(files_found)} 个条目")
+            
+            for file_path in files_found:
                 if file_path.is_file() and file_path.suffix.lower() in ['.txt', '.md']:
                     files_to_index.append((file_path, "default"))
+                    print(f"[VectorStore]   + {file_path.name}")
 
         total_files = len(files_to_index)
+        print(f"[VectorStore] ------------------------------------------------------")
+        print(f"[VectorStore] 待索引文件总数: {total_files}")
         update_progress(f"准备索引 {total_files} 个文件...")
+
+        if total_files == 0:
+            print(f"[VectorStore] ⚠️  没有找到需要索引的文件")
+            return {
+                "success": True,
+                "indexed_chunks": 0,
+                "indexed_files": 0,
+                "failed_files": 0,
+                "message": "没有找到需要索引的文件"
+            }
 
         semaphore = asyncio.Semaphore(3)
         results = []
+        completed_count = 0
 
         async def process_file_with_semaphore(file_info):
+            nonlocal completed_count
+            file_path, g_id = file_info
+            print(f"[VectorStore] 开始处理: {file_path.name}")
             async with semaphore:
                 result = await process_single_file(file_info)
-                current = results.count(None) + 1
-                update_progress(f"正在索引... ({current}/{total_files})")
+                completed_count += 1
+                progress = f"{completed_count}/{total_files}"
+                print(f"[VectorStore] 完成处理: {file_path.name} ({progress})")
+                update_progress(f"正在索引... ({progress})")
                 return result
 
+        print(f"[VectorStore] 开始异步处理文件...")
         tasks = [process_file_with_semaphore(f) for f in files_to_index]
         results = await asyncio.gather(*tasks, return_exceptions=True)
 
+        print(f"[VectorStore] 处理结果汇总:")
         for i, result in enumerate(results):
             if isinstance(result, Exception):
-                print(f"[VectorStore] 文件处理失败: {files_to_index[i][0].name}, {result}")
+                print(f"[VectorStore] ❌ {files_to_index[i][0].name}: {result}")
                 failed_files += 1
             else:
+                print(f"[VectorStore] ✓ {files_to_index[i][0].name}: {result} 个文本块")
                 indexed_count += result
                 indexed_files += 1
+
+        print(f"[VectorStore] ------------------------------------------------------")
+        print(f"[VectorStore] 索引完成")
+        print(f"[VectorStore]   成功索引文件: {indexed_files}")
+        print(f"[VectorStore]   成功索引文本块: {indexed_count}")
+        print(f"[VectorStore]   失败文件: {failed_files}")
+        print(f"[VectorStore] ==============================================")
 
         return {
             "success": True,
@@ -283,7 +329,9 @@ async def index_knowledge_base(group_id: str = None, progress_callback=None):
         }
 
     except Exception as e:
-        print(f"[VectorStore] 索引知识库失败: {e}")
+        print(f"[VectorStore] ❌ 索引知识库失败: {e}")
+        import traceback
+        traceback.print_exc()
         return {"success": False, "error": str(e)}
 
 

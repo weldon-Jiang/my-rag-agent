@@ -276,8 +276,24 @@ function handlePageNavigation(page, sessionId = null, isInitial = false) {
   } else if (page === 'models') {
     loadModels();
   } else if (page === 'skill-tools') {
-    setupSkillToolsTabs();
-    loadSkillTools();
+    console.log('[App] skill-tools 导航, window.skillToolsPage:', window.skillToolsPage);
+    if (window.skillToolsPage && typeof window.skillToolsPage.init === 'function') {
+      console.log('[App] 调用 skillToolsPage.init()');
+      window.skillToolsPage.init();
+    } else {
+      console.log('[App] skillToolsPage 模块未就绪，尝试加载模块');
+      if (typeof router !== 'undefined' && router.loadPageModule) {
+        router.loadPageModule('skill-tools').then(module => {
+          console.log('[App] 模块已加载:', module);
+          window.skillToolsPage = module;
+          if (module && module.init) {
+            module.init();
+          }
+        }).catch(err => {
+          console.error('[App] 模块加载失败:', err);
+        });
+      }
+    }
   }
 }
 
@@ -586,8 +602,9 @@ function navigateTo(page) {
     } else if (page === 'models') {
         loadModels();
     } else if (page === 'skill-tools') {
-        setupSkillToolsTabs();
-        loadSkillTools();
+        if (window.skillToolsPage && window.skillToolsPage.init) {
+            window.skillToolsPage.init();
+        }
     }
 }
 
@@ -1030,7 +1047,7 @@ async function loadModels() {
         if (modelFromUrl && publishedIds.includes(modelFromUrl)) {
             selectedModel = modelFromUrl;
         } else if (!selectedModel || !publishedIds.includes(selectedModel)) {
-            selectedModel = currentModel?.modelId || (chatModels.length > 0 ? chatModels[0].modelId : null);
+            selectedModel = currentModel?.modelId || currentModel?.id || (chatModels.length > 0 ? chatModels[0].modelId : null);
             if (selectedModel && isChatPage) {
                 urlParams.set('model', selectedModel);
                 const newUrl = `${window.location.pathname}?${urlParams.toString()}`;
@@ -1085,11 +1102,12 @@ function renderModelSelect(publishedModels) {
     `;
 
     publishedModels.forEach(model => {
+        const modelId = model.modelId || model.id;
         html += `
-            <div class="model-option ${model.id === selectedModel ? 'selected' : ''}"
-                 onclick="selectModel('${model.id}')">
-                <input type="radio" name="model" value="${model.id}"
-                       ${model.id === selectedModel ? 'checked' : ''}>
+            <div class="model-option ${modelId === selectedModel ? 'selected' : ''}"
+                 onclick="selectModel('${modelId}')">
+                <input type="radio" name="model" value="${modelId}"
+                       ${modelId === selectedModel ? 'checked' : ''}>
                 <span>${model.name}</span>
             </div>
         `;
@@ -1161,7 +1179,7 @@ function selectModel(modelId) {
  * @returns {string} 模型名称
  */
 function getSelectedModelName() {
-    const model = currentModels.find(m => m.id === selectedModel);
+    const model = currentModels.find(m => m.modelId === selectedModel || m.id === selectedModel);
     return model ? model.name : '请选择模型';
 }
 
@@ -1537,8 +1555,7 @@ async function setDefaultModel(modelId) {
         if (response.ok) {
             const result = await response.json();
             selectedModel = modelId;
-            loadModels();
-            renderModelSelect(currentModels);
+            await loadModels();
             alert(result.message || '默认模型已设置');
         }
     } catch (error) {
@@ -1824,8 +1841,9 @@ async function sendMessage() {
  * @param {string} source - 来源
  * @param {Array} toolResults - 工具结果数组
  * @param {Array} attachments - 附件列表
+ * @param {string} thinking - 思考内容
  */
-function addMessage(content, role, source = '', toolResults = [], attachments = []) {
+function addMessage(content, role, source = '', toolResults = [], attachments = [], thinking = '') {
     const chatMessages = document.getElementById('chatMessages');
     const messageDiv = document.createElement('div');
     messageDiv.className = `message ${role}`;
@@ -1890,7 +1908,18 @@ function addMessage(content, role, source = '', toolResults = [], attachments = 
     
     let messageHtml = '';
     if (thinkContent) {
-        messageHtml += `<div class="message-think"><div class="think-label">思考中...</div>${escapeHtml(thinkContent)}</div>`;
+        messageHtml += `<div class="thinking-area">
+            <div class="thinking-indicator">
+                <span class="thinking-text">🧠 ${escapeHtml(thinkContent)}</span>
+            </div>
+        </div>`;
+    }
+    if (thinking) {
+        messageHtml += `<div class="thinking-area thinking-complete ${thinking.length > 100 ? '' : 'expanded'}" onclick="this.classList.toggle('expanded');">
+            <div class="thinking-indicator">
+                <span class="thinking-text">${escapeHtml(thinking)}</span>
+            </div>
+        </div>`;
     }
     if (imageHtml) {
         messageHtml += imageHtml;
@@ -1908,7 +1937,7 @@ function addMessage(content, role, source = '', toolResults = [], attachments = 
         ${messageHtml}
         ${sourceHtml}
     `;
-    
+
     chatMessages.appendChild(messageDiv);
     chatMessages.scrollTop = chatMessages.scrollHeight;
 }
@@ -2170,13 +2199,13 @@ function loadSessionMessages(sessionId) {
             if (msg.isClarificationResponse) {
                 const clarificationHtml = `
                     <div class="message user">
-                        <div class="message-content">
+                        <div class="content-wrapper">
                             <div class="clarification-response">${escapeHtml(msg.content)}</div>
                         </div>
                     </div>
                     ${msg.finalResponse ? `
                     <div class="message assistant">
-                        <div class="message-content">
+                        <div class="content-wrapper">
                             ${escapeHtml(msg.finalResponse)}
                         </div>
                     </div>
@@ -2221,7 +2250,7 @@ function loadSessionMessages(sessionId) {
                 const clarificationHtml = `
                     <div class="message assistant">
                         ${modeLabel ? `<div class="mode-label">${modeLabel}</div>` : ''}
-                        <div class="message-content">
+                        <div class="content-wrapper">
                             <div class="clarification-question">${escapeHtml(msg.content)}</div>
                             ${optionsHtml}
                         </div>
@@ -2240,15 +2269,30 @@ function loadSessionMessages(sessionId) {
                     };
                     const modeIcon = modeIcons[msg.source] || '';
                     const modeLabel = msg.source ? `${modeIcon} ${msg.source.toUpperCase()} 模式` : '';
+
+                    if (msg.thinking) {
+                        const thinkingDiv = document.createElement('div');
+                        thinkingDiv.className = 'thinking-area thinking-complete';
+                        thinkingDiv.innerHTML = `
+                            <div class="thinking-indicator">
+                                <span class="thinking-text">${escapeHtml(msg.thinking)}</span>
+                            </div>
+                        `;
+                        thinkingDiv.onclick = function() {
+                            this.classList.toggle('expanded');
+                        };
+                        chatMessages.appendChild(thinkingDiv);
+                    }
+
                     const msgDiv = document.createElement('div');
                     msgDiv.className = 'message assistant';
                     msgDiv.innerHTML = `
                         ${modeLabel ? `<div class="mode-label">${modeLabel}</div>` : ''}
-                        <div class="message-content">${renderedContent}</div>
+                        <div class="content-wrapper">${renderedContent}</div>
                     `;
                     chatMessages.appendChild(msgDiv);
                 } else {
-                    addMessage(msg.content, msg.source || 'assistant', msg.source, msg.knowledgeResults);
+                    addMessage(msg.content, msg.source || 'assistant', msg.source, msg.knowledgeResults, [], msg.thinking);
                 }
             }
         }
@@ -2447,7 +2491,7 @@ function handleClarification(data) {
             `;
         }
 
-        messageDiv.innerHTML = `<div class="message-content clarification-content">${optionsHtml}</div>`;
+        messageDiv.innerHTML = `<div class="content-wrapper clarification-content">${optionsHtml}</div>`;
 
         chatMessages.appendChild(messageDiv);
         chatMessages.scrollTop = chatMessages.scrollHeight;

@@ -1,0 +1,39 @@
+{
+  "tools": [
+    {
+      "name": "get_weather",
+      "description": "查询天气预报",
+      "keywords": ["天气", "温度", "下雨", "气候", "晴天", "阴天", "weather", "temperature", "rain", "冷", "热", "炎热", "凉爽"],
+      "patterns": ["(.+?)天气", "(.+?)的温度", "(.+?)要不要带伞", "在(.+?)天气", "今天(.+?)怎么样"],
+      "parameter_extractor": "city"
+    },
+    {
+      "name": "get_location",
+      "description": "查询地理位置",
+      "keywords": ["位置", "在哪里", "地址", "省", "市", "区", "县", "location", "address", "属于哪个"],
+      "patterns": ["(.+?)在哪里", "(.+?)的地址", "(.+?)属于哪个省", "在(.+?)"],
+      "parameter_extractor": "location"
+    },
+    {
+      "name": "web_search",
+      "description": "网页搜索",
+      "keywords": ["搜索", "查找", "查询", "了解", "search", "find", "lookup", "了解一下", "查一下"],
+      "patterns": ["搜索(.+)", "查找(.+)", "了解一下(.+)", "查一下(.+)", "(.+?)是什么", "(.+?)怎么样"],
+      "parameter_extractor": "query"
+    },
+    {
+      "name": "read_file",
+      "description": "读取文件",
+      "keywords": ["读文件", "读取", "看文件", "打开文件", "read", "文件内容", "查看文件"],
+      "patterns": ["读取(.+)", "看(.+)文件", "打开(.+)", "查看(.+)文件"],
+      "parameter_extractor": "path"
+    },
+    {
+      "name": "write_file",
+      "description": "写入文件",
+      "keywords": ["写文件", "保存", "写入", "write", "save", "创建文件"],
+      "patterns": ["写入(.+)", "保存到(.+)", "创建(.+)文件", "把(.+)保存"],
+      "parameter_extractor": "write_params"
+    }
+  ]
+}
