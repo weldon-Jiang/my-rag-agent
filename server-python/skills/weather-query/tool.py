@@ -39,7 +39,7 @@ async def execute(params: Dict[str, Any], context: Dict[str, Any] = None) -> Dic
     else:
         return {
             "success": False,
-            "error": f"无法获取 {city} 的天气信息"
+            "error": "无法获取 " + city + " 的天气信息"
         }
 
 
@@ -79,11 +79,11 @@ async def fetch_weather(city: str) -> Dict[str, Any]:
 
 def format_weather_response(city: str, data: Dict[str, Any]) -> str:
     """格式化天气响应"""
-    return f"""
-{city}天气预报：
-🌡️ 温度：{data['temp']}°C
-💧 湿度：{data['humidity']}%
-🌬️ 风速：{data['wind']} km/h
-🌫️ 空气质量：AQI {data['aqi']}
-☁️ 天气状况：{data['condition']}
+    return """
+""" + city + """天气预报：
+温度：""" + str(data['temp']) + """°C
+湿度：""" + str(data['humidity']) + """%
+风速：""" + str(data['wind']) + """ km/h
+空气质量：AQI """ + str(data['aqi']) + """
+天气状况：""" + data['condition'] + """
 """

@@ -266,8 +266,8 @@ async def reload_tools_config():
 @router.get("/tools/status")
 async def get_tools_status():
     """获取所有工具状态"""
-    from tools_registry import tool_registry
-    from skill_manager import skill_manager
+    from .tools_registry import tool_registry
+    from .skill_manager import skill_manager
 
     all_tools = {}
     for tool_name in tool_registry._tools.keys():
@@ -313,7 +313,7 @@ async def register_tool_execute_func(tool_name: str, request: Request):
 
     if tool_name in tool_registry._tools:
         tool_registry._tools[tool_name].execute_func = TOOL_FUNCTIONS[execute_func_name]
-        print(f"[SkillsRouter] ✓ 工具 {tool_name} 已注册执行函数: {execute_func_name}")
+        print(f"[SkillsRouter] OK 工具 {tool_name} 已注册执行函数: {execute_func_name}")
         return {
             "success": True,
             "message": f"工具 {tool_name} 执行函数已注册",

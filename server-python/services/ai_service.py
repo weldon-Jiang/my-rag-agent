@@ -20,7 +20,7 @@ async def _raw_call_ai_service(
     model_config: Dict[str, Any],
     temperature: float,
     max_tokens: int,
-    history: List[Dict[str, str]] = None
+    history: Optional[List[Dict[str, str]]] = None
 ) -> Dict[str, Any]:
     print(f"[AI Service] _raw_call_ai_service 开始调用")
     content = ""
@@ -43,7 +43,7 @@ async def _stream_call_ai_service(
     model_config: Dict[str, Any],
     temperature: float,
     max_tokens: int,
-    history: List[Dict[str, str]] = None
+    history: Optional[List[Dict[str, str]]] = None
 ):
     import time
     start_time = time.time()
@@ -65,7 +65,7 @@ async def _stream_call_ai_service(
             "type": "content",
             "content": f"错误：模型配置缺少 apiKey 或 url"
         }
-        print(f"[AI Service] ❌ 错误: 模型配置缺少 apiKey 或 url: {model_config.get('id')}")
+        print(f"[AI Service] ERROR 错误: 模型配置缺少 apiKey 或 url: {model_config.get('id')}")
         print(f"[AI Service] ═══ LLM 调用结束 ═══ 耗时: {elapsed:.2f}s")
         print(f"{'='*60}\n")
         return
@@ -110,7 +110,7 @@ async def _stream_call_ai_service(
             api_url += "/"
         full_url = f"{api_url}chat/completions"
     else:
-        # 其他协议：直接使用配置的URL
+        # 其他协议或阿里云PAI-EAS服务：直接使用配置的URL
         full_url = api_url
     
     # 打印脱敏后的payload用于调试
@@ -141,7 +141,7 @@ async def _stream_call_ai_service(
                 json=payload,
                 timeout=120.0
             ) as response:
-                print(f"[AI Service] ✅ 收到响应，状态码: {response.status_code}")
+                print(f"[AI Service] OK 收到响应，状态码: {response.status_code}")
                 
                 if response.status_code != 200:
                     elapsed = time.time() - start_time
@@ -174,7 +174,7 @@ async def _stream_call_ai_service(
                         "type": "content",
                         "content": f"错误：{error_msg}"
                     }
-                    print(f"[AI Service] ❌ API错误: {error_msg}")
+                    print(f"[AI Service] ERROR API错误: {error_msg}")
                     print(f"[AI Service] ═══ LLM 调用结束 ═══ 耗时: {elapsed:.2f}s")
                     print(f"{'='*60}\n")
                     return
@@ -209,10 +209,10 @@ async def _stream_call_ai_service(
                                     if delta.get("role"):
                                         continue
                             except json.JSONDecodeError as e:
-                                print(f"[AI Service] ⚠️ JSON解析错误: {e}")
+                                print(f"[AI Service] WARN JSON解析错误: {e}")
                                 continue
                             except Exception as e:
-                                print(f"[AI Service] ⚠️ 处理响应数据错误: {e}")
+                                print(f"[AI Service] WARN 处理响应数据错误: {e}")
                                 continue
 
                 elapsed = time.time() - start_time
@@ -229,7 +229,7 @@ async def _stream_call_ai_service(
                         "type": "content",
                         "content": "错误：未收到任何响应数据"
                     }
-                    print(f"[AI Service] ❌ 错误: 未收到任何响应数据")
+                    print(f"[AI Service] ERROR 错误: 未收到任何响应数据")
                     
     except httpx.TimeoutException:
         elapsed = time.time() - start_time
@@ -237,7 +237,7 @@ async def _stream_call_ai_service(
             "type": "content",
             "content": "错误：请求超时，请稍后重试"
         }
-        print(f"[AI Service] ❌ 错误: 请求超时")
+        print(f"[AI Service] ERROR 错误: 请求超时")
         print(f"[AI Service] ═══ LLM 调用结束 ═══ 耗时: {elapsed:.2f}s")
         print(f"{'='*60}\n")
     except httpx.ConnectError:
@@ -246,7 +246,7 @@ async def _stream_call_ai_service(
             "type": "content",
             "content": "错误：无法连接到服务器，请检查网络连接或API配置"
         }
-        print(f"[AI Service] ❌ 错误: 无法连接到服务器")
+        print(f"[AI Service] ERROR 错误: 无法连接到服务器")
         print(f"[AI Service] ═══ LLM 调用结束 ═══ 耗时: {elapsed:.2f}s")
         print(f"{'='*60}\n")
     except httpx.ProtocolError as e:
@@ -255,7 +255,7 @@ async def _stream_call_ai_service(
             "type": "content",
             "content": f"错误：网络协议错误: {str(e)}"
         }
-        print(f"[AI Service] ❌ 错误: 网络协议错误 - {e}")
+        print(f"[AI Service] ERROR 错误: 网络协议错误 - {e}")
         print(f"[AI Service] ═══ LLM 调用结束 ═══ 耗时: {elapsed:.2f}s")
         print(f"{'='*60}\n")
     except Exception as e:
@@ -264,7 +264,7 @@ async def _stream_call_ai_service(
             "type": "content",
             "content": f"错误：{str(e)}"
         }
-        print(f"[AI Service] ❌ 未知错误: {e}")
+        print(f"[AI Service] ERROR 未知错误: {e}")
         print(f"[AI Service] ═══ LLM 调用结束 ═══ 耗时: {elapsed:.2f}s")
         print(f"{'='*60}\n")
 
@@ -276,7 +276,7 @@ async def call_ai_service(
     temperature: float = 0.7,
     max_tokens: int = 4096,
     use_cache: bool = True,
-    history: List[Dict[str, str]] = None
+    history: Optional[List[Dict[str, str]]] = None
 ) -> Dict[str, Any]:
     from services.ai_cache import ai_cache, circuit_breaker, CircuitBreakerOpen
     
@@ -303,7 +303,7 @@ async def call_ai_service(
     if use_cache:
         cached = ai_cache.get(prompt, model_id)
         if cached:
-            print(f"[AI Service] ✓ 命中缓存: {model_id}")
+            print(f"[AI Service] OK 命中缓存: {model_id}")
             return {
                 "success": True,
                 "content": cached,
@@ -332,7 +332,7 @@ async def call_ai_service(
         return result
 
     except CircuitBreakerOpen:
-        print(f"[AI Service] ✗ 熔断器打开，拒绝请求")
+        print(f"[AI Service] FAIL 熔断器打开，拒绝请求")
         return {
             "success": False,
             "error": "Circuit breaker open",
@@ -340,14 +340,14 @@ async def call_ai_service(
             "circuit_breaker": True
         }
     except httpx.TimeoutException:
-        print(f"[AI Service] ✗ 请求超时")
+        print(f"[AI Service] FAIL 请求超时")
         return {
             "success": False,
             "error": "Request timeout",
             "content": "抱歉，AI 请求超时了，请稍后重试"
         }
     except Exception as e:
-        print(f"[AI Service] ✗ 调用失败: {str(e)}")
+        print(f"[AI Service] FAIL 调用失败: {str(e)}")
         return {
             "success": False,
             "error": str(e),
@@ -396,7 +396,7 @@ async def analyze_intent(message: str, model_config: Optional[Dict] = None) -> D
             json_end = content.rfind("}") + 1
             if json_start >= 0 and json_end > json_start:
                 intent_data = json.loads(content[json_start:json_end])
-                print(f"[AI Service] ✓ 意图分析成功: {intent_data.get('intent')}")
+                print(f"[AI Service] OK 意图分析成功: {intent_data.get('intent')}")
                 print(f"[AI Service] 建议工具: {intent_data.get('suggested_tools')}")
                 print(f"[AI Service] ═══ 意图分析结束 ═══\n")
                 return {
@@ -407,7 +407,7 @@ async def analyze_intent(message: str, model_config: Optional[Dict] = None) -> D
                     "task_breakdown": intent_data.get("task_breakdown", [])
                 }
         except json.JSONDecodeError:
-            print(f"[AI Service] ✗ 意图分析JSON解析失败")
+            print(f"[AI Service] FAIL 意图分析JSON解析失败")
 
     print(f"[AI Service] 使用默认意图: general_chat")
     print(f"[AI Service] ═══ 意图分析结束 ═══\n")
@@ -423,11 +423,11 @@ async def analyze_intent(message: str, model_config: Optional[Dict] = None) -> D
 def build_system_prompt(mode: str = "hybrid", skills_info: str = "") -> str:
     base_prompt = ""
     if mode == "agent":
-        base_prompt = """你是一个友好的AI助手，名字叫小M。请直接回答用户的问题。"""
+        base_prompt = """你是一个友好、专业的AI助手，名字叫小M。请直接回答用户的问题。"""
     elif mode == "knowledge":
-        base_prompt = """你是一个知识库助手，专门用于搜索和展示知识库中的内容。"""
+        base_prompt = """你是一个智能的知识库助手，专门用于搜索和展示知识库中的内容。"""
     else:
-        base_prompt = """你是一个友好的AI助手，名字叫小M。用户跟你对话时，保持友好、专业的态度。"""
+        base_prompt = """你是一个友好、专业的AI助手，名字叫小M。用户跟你对话时，保持友好、专业的态度。"""
 
     if skills_info:
         base_prompt = f"""{base_prompt}
@@ -479,7 +479,7 @@ async def process_chat_message(
             for i, r in enumerate(kb_result["results"], 1):
                 content_preview = r.get("content", "")[:150]
                 kb_content += f"{i}. **{r['file']}**\n   {content_preview}...\n\n"
-            print(f"[AI Service] ✓ 知识库检索成功: {len(kb_result['results'])} 条结果")
+            print(f"[AI Service] OK 知识库检索成功: {len(kb_result['results'])} 条结果")
             print(f"[AI Service] ═══ process_chat_message 结束 ═══")
             print(f"{'='*60}\n")
             return {
@@ -490,7 +490,7 @@ async def process_chat_message(
                 "group_id": group_id
             }
         else:
-            print(f"[AI Service] ✗ 知识库检索无结果")
+            print(f"[AI Service] FAIL 知识库检索无结果")
             print(f"[AI Service] ═══ process_chat_message 结束 ═══")
             print(f"{'='*60}\n")
             return {
@@ -509,7 +509,7 @@ async def process_chat_message(
             model_config=model_config,
             history=recent_history
         )
-        print(f"[AI Service] ✓ LLM调用完成, 响应长度: {len(ai_result.get('content', ''))}")
+        print(f"[AI Service] OK LLM调用完成, 响应长度: {len(ai_result.get('content', ''))}")
         print(f"[AI Service] ═══ process_chat_message 结束 ═══")
         print(f"{'='*60}\n")
         return {
@@ -520,7 +520,7 @@ async def process_chat_message(
         }
 
     if mode == "hybrid":
-        print(f"\n[AI Service] 🔧 HYBRID 模式 - 渐进式技能匹配与执行")
+        print(f"\n[AI Service] TOOL HYBRID 模式 - 渐进式技能匹配与执行")
 
         # Step 1: 意图分析
         intent_result = None
@@ -578,7 +578,7 @@ async def process_chat_message(
                 history=recent_history
             )
             
-            print(f"[AI Service] ✓ LLM调用完成, 响应长度: {len(ai_result.get('content', ''))}")
+            print(f"[AI Service] OK LLM调用完成, 响应长度: {len(ai_result.get('content', ''))}")
             print(f"[AI Service] ═══ process_chat_message 结束 ═══")
             print(f"{'='*60}\n")
             
@@ -620,29 +620,29 @@ async def process_chat_message(
 
             for tool_name, confidence, params in matched_tools:
                 if confidence >= 0.3:
-                    print(f"[AI Service] 🔧 执行工具: {tool_name} (置信度: {confidence:.2f})")
+                    print(f"[AI Service] TOOL 执行工具: {tool_name} (置信度: {confidence:.2f})")
                     tool_result = await execute_tool(tool_name, params, {})
                     if tool_result.get("success"):
                         tool_results.append({"tool": tool_name, "confidence": confidence, "result": tool_result.get("result", tool_result)})
                         used_tools.append(tool_name)
-                        print(f"[AI Service] ✓ 工具执行成功: {tool_name}")
+                        print(f"[AI Service] OK 工具执行成功: {tool_name}")
 
             system_prompt = build_system_prompt(mode, skills_info)
             if tool_results:
-                tool_context = "\n\n🛠️ 工具执行结果:\n"
+                tool_context = "\n\n工具执行结果:\n"
                 for tr in tool_results:
                     tool_context += f"- **{tr['tool']}**: {tr['result']}\n"
                 system_prompt = f"{system_prompt}{tool_context}\n\n请根据上述工具执行结果，整合信息回答用户问题。如果工具执行失败，请直接回答用户问题。"
                 print(f"[AI Service] 已将 {len(tool_results)} 个工具结果注入提示词")
 
-            print(f"[AI Service] 🔧 调用 LLM 整合工具结果")
+            print(f"[AI Service] TOOL 调用 LLM 整合工具结果")
             ai_result = await call_ai_service(
                 prompt=message,
                 system_prompt=system_prompt,
                 model_config=model_config,
                 history=recent_history
             )
-            print(f"[AI Service] ✓ LLM调用完成, 响应长度: {len(ai_result.get('content', ''))}")
+            print(f"[AI Service] OK LLM调用完成, 响应长度: {len(ai_result.get('content', ''))}")
             print(f"[AI Service] ═══ process_chat_message 结束 ═══")
             print(f"{'='*60}\n")
             return {
@@ -659,7 +659,7 @@ async def process_chat_message(
         model_config=model_config,
         history=recent_history
     )
-    print(f"[AI Service] ✓ LLM调用完成")
+    print(f"[AI Service] OK LLM调用完成")
     print(f"[AI Service] ═══ process_chat_message 结束 ═══")
     print(f"{'='*60}\n")
     return {

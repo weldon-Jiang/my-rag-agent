@@ -31,7 +31,7 @@ class SubAgent:
         print(f"[SubAgent:{self.name}] 匹配的工具: {matched_tools}")
 
         if not matched_tools:
-            print(f"[SubAgent:{self.name}] ✗ 未找到匹配的工具")
+            print(f"[SubAgent:{self.name}] FAIL 未找到匹配的工具")
             return {
                 "success": False,
                 "agent": self.name,
@@ -49,9 +49,9 @@ class SubAgent:
                     "tool": tool_name,
                     "result": result
                 })
-                print(f"[SubAgent:{self.name}] ✓ 工具 {tool_name} 执行成功")
+                print(f"[SubAgent:{self.name}] OK 工具 {tool_name} 执行成功")
             except Exception as e:
-                print(f"[SubAgent:{self.name}] ✗ 工具 {tool_name} 执行失败: {str(e)}")
+                print(f"[SubAgent:{self.name}] FAIL 工具 {tool_name} 执行失败: {str(e)}")
 
         print(f"[SubAgent:{self.name}] ══ 任务执行完成 ══\n")
         return {
@@ -152,7 +152,7 @@ class MultiAgentCoordinator:
         agent = self.select_agent(task)
 
         if not agent:
-            print(f"[MultiAgent] ✗ 未找到合适的Agent")
+            print(f"[MultiAgent] FAIL 未找到合适的Agent")
             return {
                 "success": False,
                 "error": "未找到合适的Agent"
@@ -173,7 +173,7 @@ class MultiAgentCoordinator:
         results = await asyncio.gather(*promises, return_exceptions=True)
 
         success_count = sum(1 for r in results if not isinstance(r, Exception) and r.get("success"))
-        print(f"[MultiAgent] ✓ 并行执行完成: {success_count}/{len(tasks)} 成功")
+        print(f"[MultiAgent] OK 并行执行完成: {success_count}/{len(tasks)} 成功")
         print(f"[MultiAgent] ══ 并行执行结束 ══\n")
 
         return {
@@ -197,11 +197,11 @@ class MultiAgentCoordinator:
             results.append(result)
 
             if not result.get("success", False):
-                print(f"[MultiAgent] ✗ 任务失败，停止执行")
+                print(f"[MultiAgent] FAIL 任务失败，停止执行")
                 break
 
         success_count = sum(1 for r in results if r.get("success"))
-        print(f"[MultiAgent] ✓ 顺序执行完成: {success_count}/{len(tasks)} 成功")
+        print(f"[MultiAgent] OK 顺序执行完成: {success_count}/{len(tasks)} 成功")
         print(f"[MultiAgent] ══ 顺序执行结束 ══\n")
 
         return {

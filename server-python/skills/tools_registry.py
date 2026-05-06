@@ -85,12 +85,71 @@ class ToolRegistry:
                     parameter_extractor=self._get_extractor(tool_config.get("parameter_extractor"))
                 )
                 self.register_tool(tool_def)
-                print(f"[ToolRegistry] ✓ 从配置加载工具: {tool_config['name']} (keywords: {len(tool_config.get('keywords', []))})")
+                print(f"[ToolRegistry] OK 从配置加载工具: {tool_config['name']} (keywords: {len(tool_config.get('keywords', []))})")
 
             print(f"[ToolRegistry] 从配置文件加载了 {len(tools_config)} 个工具")
         except Exception as e:
             print(f"[ToolRegistry] 加载配置文件失败: {e}")
             self._initialize_default_tools()
+
+    def _initialize_default_tools(self):
+        """初始化默认工具（当配置文件不存在或加载失败时使用）"""
+        print(f"[ToolRegistry] 初始化默认工具")
+        
+        default_tools = [
+            {
+                "name": "get_weather",
+                "description": "查询指定城市的天气信息",
+                "keywords": ["天气", "温度", "气温", "下雨", "晴天", "预报"],
+                "patterns": [r"(.+?)天气", r"(.+?)的温度"],
+                "parameter_extractor": "city"
+            },
+            {
+                "name": "get_location",
+                "description": "查询指定地点的位置信息",
+                "keywords": ["在哪里", "地址", "位置", "地图"],
+                "patterns": [r"(.+?)在哪里", r"(.+?)的地址"],
+                "parameter_extractor": "location"
+            },
+            {
+                "name": "web_search",
+                "description": "通过搜索引擎在互联网上搜索信息",
+                "keywords": ["搜索", "查找", "了解一下", "是什么"],
+                "patterns": [r"搜索(.+)", r"查找(.+)"],
+                "parameter_extractor": "query"
+            },
+            {
+                "name": "read_file",
+                "description": "读取指定文件的内容",
+                "keywords": ["读取", "打开", "查看", "文件"],
+                "patterns": [r"读取(.+)", r"打开(.+)"],
+                "parameter_extractor": "path"
+            },
+            {
+                "name": "write_file",
+                "description": "写入内容到指定文件",
+                "keywords": ["写入", "保存", "创建", "文件"],
+                "patterns": [r"写入(.+)", r"保存(.+)"],
+                "parameter_extractor": "write_params"
+            }
+        ]
+        
+        for tool_config in default_tools:
+            tool_def = ToolDefinition(
+                name=tool_config["name"],
+                description=tool_config.get("description", ""),
+                capability=ToolCapability(
+                    keywords=tool_config.get("keywords", []),
+                    patterns=tool_config.get("patterns", []),
+                    description=tool_config.get("description", "")
+                ),
+                execute_func=None,
+                parameter_extractor=self._get_extractor(tool_config.get("parameter_extractor"))
+            )
+            self.register_tool(tool_def)
+            print(f"[ToolRegistry] OK 初始化默认工具: {tool_config['name']}")
+        
+        print(f"[ToolRegistry] 初始化了 {len(default_tools)} 个默认工具")
 
     def _get_extractor(self, extractor_name: str) -> Optional[Callable]:
         """根据名称获取参数提取器"""

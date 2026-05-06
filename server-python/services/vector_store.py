@@ -230,7 +230,7 @@ async def index_knowledge_base(group_id: str = None, progress_callback=None):
     
     collection = get_collection()
     if collection is None:
-        print(f"[VectorStore] ❌ 向量存储未初始化，索引失败")
+        print(f"[VectorStore] ERROR 向量存储未初始化，索引失败")
         return {"success": False, "error": "向量存储未初始化"}
 
     indexed_count = 0
@@ -274,7 +274,7 @@ async def index_knowledge_base(group_id: str = None, progress_callback=None):
         update_progress(f"准备索引 {total_files} 个文件...")
 
         if total_files == 0:
-            print(f"[VectorStore] ⚠️  没有找到需要索引的文件")
+            print(f"[VectorStore] WARN  没有找到需要索引的文件")
             return {
                 "success": True,
                 "indexed_chunks": 0,
@@ -306,10 +306,10 @@ async def index_knowledge_base(group_id: str = None, progress_callback=None):
         print(f"[VectorStore] 处理结果汇总:")
         for i, result in enumerate(results):
             if isinstance(result, Exception):
-                print(f"[VectorStore] ❌ {files_to_index[i][0].name}: {result}")
+                print(f"[VectorStore] ERROR {files_to_index[i][0].name}: {result}")
                 failed_files += 1
             else:
-                print(f"[VectorStore] ✓ {files_to_index[i][0].name}: {result} 个文本块")
+                print(f"[VectorStore] OK {files_to_index[i][0].name}: {result} 个文本块")
                 indexed_count += result
                 indexed_files += 1
 
@@ -329,7 +329,7 @@ async def index_knowledge_base(group_id: str = None, progress_callback=None):
         }
 
     except Exception as e:
-        print(f"[VectorStore] ❌ 索引知识库失败: {e}")
+        print(f"[VectorStore] ERROR 索引知识库失败: {e}")
         import traceback
         traceback.print_exc()
         return {"success": False, "error": str(e)}

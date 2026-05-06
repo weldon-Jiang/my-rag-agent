@@ -173,6 +173,7 @@ class SkillManager:
             )
             self._skills_cache[skill_id] = skill
             if tools:
+                self._load_skill_tool(skill)
                 self._register_skill_tools(skill)
             discovered_count += 1
             print(f"[SkillManager] 发现技能: {skill_id} (tier: {skill.tier}, enabled: {skill.enabled}, keywords: {len(keywords)}, tools: {len(tools)})")
@@ -287,7 +288,7 @@ class SkillManager:
             self.registry.setdefault("enabled_skills", []).append(skill_id)
 
         save_skill_registry(self.registry)
-        print(f"[SkillManager] ✓ 技能已安装: {skill.name} (keywords: {len(keywords)}, patterns: {len(patterns)}, tools: {len(tools)})")
+        print(f"[SkillManager] OK 技能已安装: {skill.name} (keywords: {len(keywords)}, patterns: {len(patterns)}, tools: {len(tools)})")
         return True
 
     def _load_skill_tool(self, skill: Skill):
@@ -311,11 +312,11 @@ class SkillManager:
 
                 if hasattr(module, 'execute'):
                     self._register_tool_execute_func(skill.id, module.execute)
-                    print(f"[SkillManager] ✓ 技能 {skill.id} 的 tool.py 已加载并注册")
+                    print(f"[SkillManager] OK 技能 {skill.id} 的 tool.py 已加载并注册")
                 else:
-                    print(f"[SkillManager] ⚠️ 技能 {skill.id} 的 tool.py 没有 execute 函数")
+                    print(f"[SkillManager] WARN 技能 {skill.id} 的 tool.py 没有 execute 函数")
         except Exception as e:
-            print(f"[SkillManager] ⚠️ 加载技能 {skill.id} 的 tool.py 失败: {e}")
+            print(f"[SkillManager] WARN 加载技能 {skill.id} 的 tool.py 失败: {e}")
 
     def _register_tool_execute_func(self, skill_id: str, execute_func):
         """注册工具执行函数"""
@@ -328,10 +329,10 @@ class SkillManager:
                     if tool_name:
                         if tool_name in tool_registry._tools:
                             tool_registry._tools[tool_name].execute_func = execute_func
-                            print(f"[SkillManager] ✓ 工具 {tool_name} 已注册执行函数 (来自技能 {skill_id})")
+                            print(f"[SkillManager] OK 工具 {tool_name} 已注册执行函数 (来自技能 {skill_id})")
                         else:
                             tool_registry.register_tool_with_func(tool_name, skill.description, execute_func)
-                            print(f"[SkillManager] ✓ 工具 {tool_name} 已创建并注册执行函数 (来自技能 {skill_id})")
+                            print(f"[SkillManager] OK 工具 {tool_name} 已创建并注册执行函数 (来自技能 {skill_id})")
 
     def _extract_keywords(self, metadata: Dict) -> List[str]:
         """从技能元数据提取关键词"""
@@ -390,7 +391,7 @@ class SkillManager:
             tool_name = tool_def.get("name")
             if tool_name:
                 tool_registry.register_skill_tool_reference(skill.id, skill.name, tool_name)
-                print(f"[SkillManager] ✓ 技能 {skill.name} 注册工具: {tool_name}")
+                print(f"[SkillManager] OK 技能 {skill.name} 注册工具: {tool_name}")
 
     def get_skill_tools(self, skill_id: str) -> List[str]:
         """获取技能需要的工具列表"""
@@ -468,7 +469,7 @@ class SkillManager:
             self.registry["enabled_skills"] = [s for s in self.registry["enabled_skills"] if s != skill_id]
 
         save_skill_registry(self.registry)
-        print(f"[SkillManager] ✓ 技能已卸载: {skill_id}")
+        print(f"[SkillManager] OK 技能已卸载: {skill_id}")
         return True
 
     def enable_skill(self, skill_id: str) -> bool:

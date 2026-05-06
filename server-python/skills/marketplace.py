@@ -12,7 +12,22 @@ import zipfile
 import shutil
 from pathlib import Path
 from typing import List, Dict, Any, Optional
-from .skill_manager import Skill, parse_skill_md, MARKETPLACE_DIR, SKILLS_DIR
+
+# 延迟导入避免循环依赖
+_Skill = None
+_parse_skill_md = None
+_MARKETPLACE_DIR = None
+_SKILLS_DIR = None
+
+def _get_skill_manager():
+    global _Skill, _parse_skill_md, _MARKETPLACE_DIR, _SKILLS_DIR
+    if _Skill is None:
+        from .skill_manager import Skill, parse_skill_md, MARKETPLACE_DIR, SKILLS_DIR
+        _Skill = Skill
+        _parse_skill_md = parse_skill_md
+        _MARKETPLACE_DIR = MARKETPLACE_DIR
+        _SKILLS_DIR = SKILLS_DIR
+    return _Skill, _parse_skill_md, _MARKETPLACE_DIR, _SKILLS_DIR
 
 
 def _get_settings():
@@ -45,6 +60,8 @@ class SkillMarketplace:
     @staticmethod
     def _get_local_marketplace_skills() -> List[Dict[str, Any]]:
         """获取本地市场技能"""
+        _, parse_skill_md, MARKETPLACE_DIR, _ = _get_skill_manager()
+        
         if not MARKETPLACE_DIR.exists():
             MARKETPLACE_DIR.mkdir(parents=True, exist_ok=True)
             SkillMarketplace._create_default_marketplace()
@@ -285,6 +302,7 @@ class SkillMarketplace:
             skill_path = github_info.get("path", skill_id)
 
         # 首先清理可能存在的旧目录
+        _, _, _, SKILLS_DIR = _get_skill_manager()
         dest = SKILLS_DIR / skill_id
         if dest.exists():
             try:
@@ -364,7 +382,7 @@ class SkillMarketplace:
                     pass
                 return False
 
-            print(f"[SkillMarketplace] ✓ 成功安装技能: {skill_id} ({file_count} 个文件)")
+            print(f"[SkillMarketplace] OK 成功安装技能: {skill_id} ({file_count} 个文件)")
             return True
         except Exception as e:
             print(f"[SkillMarketplace] GitHub 安装失败: {e}")
@@ -440,6 +458,7 @@ class SkillMarketplace:
                 return False
 
             # 复制到最终位置
+            _, _, _, SKILLS_DIR = _get_skill_manager()
             dest = SKILLS_DIR / skill_id
             if dest.exists():
                 shutil.rmtree(dest)
@@ -458,7 +477,7 @@ class SkillMarketplace:
 
             # 统计文件数量
             file_count = sum(1 for _ in dest.rglob("*") if _.is_file())
-            print(f"[SkillMarketplace] ✓ ZIP 解压安装成功: {skill_id} ({file_count} 个文件)")
+            print(f"[SkillMarketplace] OK ZIP 解压安装成功: {skill_id} ({file_count} 个文件)")
 
             # 清理临时文件
             shutil.rmtree(temp_root)
@@ -532,6 +551,7 @@ class SkillMarketplace:
     @staticmethod
     def _is_skill_installed(skill_id: str) -> bool:
         """检查技能是否真正安装（需要 SKILL.md 文件）"""
+        _, _, _, SKILLS_DIR = _get_skill_manager()
         skill_dir = SKILLS_DIR / skill_id
         if not skill_dir.exists():
             return False
@@ -574,6 +594,7 @@ class SkillMarketplace:
             return False
 
         # 创建技能目录
+        _, _, _, SKILLS_DIR = _get_skill_manager()
         skill_dir = SKILLS_DIR / skill_id
         if skill_dir.exists():
             print(f"[SkillMarketplace] 技能目录已存在: {skill_id}")
@@ -626,7 +647,7 @@ class SkillMarketplace:
 
         # 刷新技能列表
         skill_manager.refresh_skills()
-        print(f"[SkillMarketplace] ✓ 技能创建成功: {skill_id}")
+        print(f"[SkillMarketplace] OK 技能创建成功: {skill_id}")
         return True
 
     @staticmethod
@@ -647,6 +668,7 @@ class SkillMarketplace:
                     if result:
                         # 安装成功后调用 skill_manager 进行正式注册
                         from .skill_manager import skill_manager
+                        _, _, _, SKILLS_DIR = _get_skill_manager()
                         skill_path = SKILLS_DIR / skill_id
                         if skill_path.exists():
                             skill_manager.install_skill(skill_path)
@@ -658,6 +680,7 @@ class SkillMarketplace:
                     result = SkillMarketplace._install_from_remote(skill_id, remote_url)
                     if result:
                         from .skill_manager import skill_manager
+                        _, _, _, SKILLS_DIR = _get_skill_manager()
                         skill_path = SKILLS_DIR / skill_id
                         if skill_path.exists():
                             skill_manager.install_skill(skill_path)
@@ -665,6 +688,7 @@ class SkillMarketplace:
                         skill_manager.refresh_skills()
                     return result
 
+        _, _, MARKETPLACE_DIR, SKILLS_DIR = _get_skill_manager()
         source_path = MARKETPLACE_DIR / skill_id
         if not source_path.exists():
             return False
@@ -697,6 +721,7 @@ class SkillMarketplace:
                 return False
 
             skill_data = response.json()
+            _, _, _, SKILLS_DIR = _get_skill_manager()
             dest = SKILLS_DIR / skill_id
             dest.mkdir(parents=True, exist_ok=True)
 
@@ -715,6 +740,7 @@ class SkillMarketplace:
     @staticmethod
     def uninstall_from_marketplace(skill_id: str) -> bool:
         """从已安装中移除市场技能（不删除市场源）"""
+        _, _, _, SKILLS_DIR = _get_skill_manager()
         installed = SKILLS_DIR / skill_id
         if not installed.exists():
             return False
@@ -725,6 +751,7 @@ class SkillMarketplace:
     @staticmethod
     def publish_to_marketplace(skill_id: str, remote: bool = False) -> bool:
         """发布技能到市场"""
+        _, _, MARKETPLACE_DIR, SKILLS_DIR = _get_skill_manager()
         source = SKILLS_DIR / skill_id
         if not source.exists():
             return False
@@ -748,6 +775,7 @@ class SkillMarketplace:
     def _publish_to_remote(skill_id: str, remote_url: str) -> bool:
         """发布技能到远程市场"""
         try:
+            _, _, _, SKILLS_DIR = _get_skill_manager()
             source = SKILLS_DIR / skill_id
             files = {}
             for f in source.rglob("*"):
@@ -1022,6 +1050,7 @@ class SkillMarketplace:
             }
         ]
 
+        _, _, MARKETPLACE_DIR, _ = _get_skill_manager()
         for skill_data in default_skills:
             skill_id = skill_data.pop("id")
             content = skill_data.pop("content")

@@ -1046,8 +1046,10 @@ async function loadModels() {
 
         if (modelFromUrl && publishedIds.includes(modelFromUrl)) {
             selectedModel = modelFromUrl;
+            window.selectedModel = modelFromUrl;
         } else if (!selectedModel || !publishedIds.includes(selectedModel)) {
             selectedModel = currentModel?.modelId || currentModel?.id || (chatModels.length > 0 ? chatModels[0].modelId : null);
+            window.selectedModel = selectedModel;
             if (selectedModel && isChatPage) {
                 urlParams.set('model', selectedModel);
                 const newUrl = `${window.location.pathname}?${urlParams.toString()}`;
@@ -1141,6 +1143,7 @@ function toggleModelDropdown() {
  */
 function selectModel(modelId) {
     selectedModel = modelId;
+    window.selectedModel = modelId;
     const modelName = getSelectedModelName();
     const nameSpan = document.getElementById('selectedModelName');
     if (nameSpan) {
@@ -1507,6 +1510,7 @@ async function deleteModel(modelId) {
         if (response.ok) {
             if (selectedModel === modelId) {
                 selectedModel = currentModels.find(m => m.modelId !== modelId)?.modelId;
+                window.selectedModel = selectedModel;
             }
             loadModels();
         }
@@ -1555,6 +1559,7 @@ async function setDefaultModel(modelId) {
         if (response.ok) {
             const result = await response.json();
             selectedModel = modelId;
+            window.selectedModel = modelId;
             await loadModels();
             alert(result.message || '默认模型已设置');
         }

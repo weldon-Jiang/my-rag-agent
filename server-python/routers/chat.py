@@ -130,7 +130,7 @@ async def stream_chat_message(
                 from skills.skill_manager import skill_manager
                 from skills.tools_registry import tool_registry
 
-                print(f"[Chat Router] 🔧 HYBRID 模式 - 技能+工具整合")
+                print(f"[Chat Router] TOOL HYBRID 模式 - 技能+工具整合")
                 
                 matched_skills = []
                 try:
@@ -149,22 +149,22 @@ async def stream_chat_message(
                     if confidence >= 0.3:
                         try:
                             skill_tool_names = skill_manager.get_skill_tools(skill.id)
-                            print(f"[Chat Router] 🔧 匹配技能: {skill.name} (置信度: {confidence:.2f}), 需要工具: {skill_tool_names}")
+                            print(f"[Chat Router] TOOL 匹配技能: {skill.name} (置信度: {confidence:.2f}), 需要工具: {skill_tool_names}")
 
                             if not skill_tool_names:
-                                print(f"[Chat Router] ⚠️ 技能 {skill.name} 没有配置工具，跳过")
+                                print(f"[Chat Router] WARN 技能 {skill.name} 没有配置工具，跳过")
                                 skipped_skills.append(skill.name)
                                 continue
 
                             skill_executed = False
                             for tool_name in skill_tool_names:
                                 if not tool_registry.is_tool_executable(tool_name):
-                                    print(f"[Chat Router] ⚠️ 工具 {tool_name} 不存在或未注册，跳过")
+                                    print(f"[Chat Router] WARN 工具 {tool_name} 不存在或未注册，跳过")
                                     skipped_skills.append(f"{skill.name}({tool_name})")
                                     continue
 
-                                yield json.dumps({"type": "thinking", "content": f"🔧 技能 {skill.name} 调用工具 {tool_name}..."}, ensure_ascii=False)
-                                print(f"[Chat Router] 🔧 执行工具: {tool_name}")
+                                yield json.dumps({"type": "thinking", "content": "技能 " + skill.name + " 调用工具 " + tool_name + "..."}, ensure_ascii=False)
+                                print(f"[Chat Router] TOOL 执行工具: {tool_name}")
                                 tool_result = await execute_tool(tool_name, {"query": message}, {})
                                 if tool_result.get("success"):
                                     tool_results.append({
@@ -177,30 +177,30 @@ async def stream_chat_message(
                                     used_tools.append(tool_name)
                                     used_skills.append(skill.name)
                                     skill_executed = True
-                                    print(f"[Chat Router] ✓ 技能 {skill.name} 工具 {tool_name} 执行成功")
-                                    yield json.dumps({"type": "thinking", "content": f"✅ 技能 {skill.name} 执行完成"}, ensure_ascii=False)
+                                    print(f"[Chat Router] OK 技能 {skill.name} 工具 {tool_name} 执行成功")
+                                    yield json.dumps({"type": "thinking", "content": "技能 " + skill.name + " 执行完成"}, ensure_ascii=False)
 
                             if not skill_executed and skill_tool_names:
-                                print(f"[Chat Router] ⚠️ 技能 {skill.name} 的工具都不可用")
+                                print(f"[Chat Router] WARN 技能 {skill.name} 的工具都不可用")
                         except Exception as e:
                             print(f"[Chat Router] 执行技能 {skill.name} 失败: {e}")
-                            yield json.dumps({"type": "thinking", "content": f"⚠️ 技能 {skill.name} 执行失败: {str(e)}"}, ensure_ascii=False)
+                            yield json.dumps({"type": "thinking", "content": "技能 " + skill.name + " 执行失败: " + str(e)}, ensure_ascii=False)
 
                 if skipped_skills:
-                    yield json.dumps({"type": "thinking", "content": f"⚠️ 跳过 {len(skipped_skills)} 个技能(工具不可用)"}, ensure_ascii=False)
+                    yield json.dumps({"type": "thinking", "content": "跳过 " + str(len(skipped_skills)) + " 个技能(工具不可用)"}, ensure_ascii=False)
 
                 if tool_results:
-                    yield json.dumps({"type": "thinking", "content": f"✅ 已执行 {len(tool_results)} 个技能工具"}, ensure_ascii=False)
+                    yield json.dumps({"type": "thinking", "content": "已执行 " + str(len(tool_results)) + " 个技能工具"}, ensure_ascii=False)
 
                 system_prompt = build_system_prompt(mode)
                 model_max_tokens = model_config.get("max_tokens", 128000) if model_config else 128000
-                print(f"[Chat Router] 🔧 hybrid模式 - 整合技能结果后调用LLM, max_tokens={model_max_tokens}")
+                print(f"[Chat Router] TOOL hybrid模式 - 整合技能结果后调用LLM, max_tokens={model_max_tokens}")
                 if tool_results:
-                    skill_context = "\n\n🛠️ 技能执行结果:\n"
+                    skill_context = "\n\n技能执行结果:\n"
                     for tr in tool_results:
                         skill_context += f"- **{tr['skill_name']}** (工具: {tr['tool']}): {tr['result']}\n"
                     system_prompt = f"{system_prompt}{skill_context}\n\n请根据上述技能执行结果，整合信息回答用户问题。"
-                    print(f"[Chat Router] 🔧 已将 {len(tool_results)} 个技能结果注入提示词 (技能: {used_skills})")
+                    print(f"[Chat Router] TOOL 已将 {len(tool_results)} 个技能结果注入提示词 (技能: {used_skills})")
 
                 thinking_content = ""
                 async for chunk in _stream_call_ai_service(
@@ -211,7 +211,7 @@ async def stream_chat_message(
                         yield json.dumps({"type": "thinking", "content": thinking_content}, ensure_ascii=False)
                     elif chunk.get("type") == "content":
                         yield json.dumps({"type": "content", "content": chunk.get("content", "")}, ensure_ascii=False)
-                print(f"[Chat Router] 🔧 hybrid 模式响应完成, 使用技能: {used_skills}")
+                print(f"[Chat Router] TOOL hybrid 模式响应完成, 使用技能: {used_skills}")
             except Exception as e:
                 print(f"[Chat Router] hybrid 模式处理失败: {e}")
                 yield json.dumps({"type": "content", "content": f"错误：处理失败 - {str(e)}"}, ensure_ascii=False)

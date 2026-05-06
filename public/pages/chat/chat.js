@@ -136,7 +136,8 @@ async function handleSendMessage() {
         message: message,
         session_id: window.currentSessionId || null,
         mode: mode,
-        group_id: groupId || null
+        group_id: groupId || null,
+        model: window.selectedModel || null
       })
     });
 
