@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
 from typing import Dict, Any, Optional, List
 import json
@@ -247,6 +247,81 @@ async def get_tools():
         "tools": TOOL_DEFINITIONS,
         "capabilities": CAPABILITY_TOOLS
     }
+
+
+@router.post("/tools/reload")
+async def reload_tools_config():
+    """重载工具配置文件（热更新）"""
+    from tools_registry import tool_registry
+    tool_registry.reload_config()
+    tool_registry.reload_skill_tools()
+    return {
+        "success": True,
+        "message": "工具配置已重载",
+        "tools_count": len(tool_registry._tools),
+        "tools": [t for t in tool_registry._tools.keys()]
+    }
+
+
+@router.get("/tools/status")
+async def get_tools_status():
+    """获取所有工具状态"""
+    from .tools_registry import tool_registry
+    from .skill_manager import skill_manager
+
+    all_tools = {}
+    for tool_name in tool_registry._tools.keys():
+        is_executable = tool_registry.is_tool_executable(tool_name)
+        needed_by = tool_registry._tool_to_skills.get(tool_name, [])
+        all_tools[tool_name] = {
+            "registered": True,
+            "executable": is_executable,
+            "needed_by_skills": needed_by
+        }
+
+    for skill in skill_manager._skills_cache.values():
+        for tool_def in skill.tools:
+            tool_name = tool_def.get("name")
+            if tool_name and tool_name not in all_tools:
+                all_tools[tool_name] = {
+                    "registered": False,
+                    "executable": False,
+                    "needed_by_skills": [skill.id]
+                }
+
+    return {
+        "success": True,
+        "tools": all_tools,
+        "total": len(all_tools),
+        "executable_count": sum(1 for t in all_tools.values() if t["executable"])
+    }
+
+
+@router.post("/tools/register/{tool_name}")
+async def register_tool_execute_func(tool_name: str, request: Request):
+    """动态注册工具执行函数"""
+    from tools_registry import tool_registry
+
+    body = await request.json()
+    execute_func_name = body.get("execute_func")
+
+    if not execute_func_name:
+        return {"success": False, "message": "需要提供 execute_func 名称"}
+
+    if execute_func_name not in TOOL_FUNCTIONS:
+        return {"success": False, "message": f"未知的执行函数: {execute_func_name}"}
+
+    if tool_name in tool_registry._tools:
+        tool_registry._tools[tool_name].execute_func = TOOL_FUNCTIONS[execute_func_name]
+        print(f"[SkillsRouter] OK 工具 {tool_name} 已注册执行函数: {execute_func_name}")
+        return {
+            "success": True,
+            "message": f"工具 {tool_name} 执行函数已注册",
+            "tool_name": tool_name,
+            "execute_func": execute_func_name
+        }
+    else:
+        return {"success": False, "message": f"工具 {tool_name} 未注册，请先注册工具"}
 
 
 @router.get("/tools/{tool_name}")

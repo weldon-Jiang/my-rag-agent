@@ -118,8 +118,8 @@ const api = {
   // 模型相关
   models: {
     list: () => get('/api/models/'),
-    get: (id) => get(`/api/models/${id}/`),
-    update: (id, config) => post(`/api/models/${id}/`, config)
+    get: (id) => get(`/api/models/${id}`),
+    update: (id, config) => post(`/api/models/${id}`, config)
   },
 
   // 工具相关

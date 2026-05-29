@@ -33,8 +33,12 @@ async function loadModels() {
   try {
     const response = await fetch('/api/models');
     const models = await response.json();
-    renderModels(models);
-    renderModelsList(models);
+
+    const chatModels = models.filter(m => m.type !== 'embedding');
+    const embeddingModels = models.filter(m => m.type === 'embedding');
+
+    renderModels(chatModels);
+    renderModelsList(chatModels, embeddingModels);
   } catch (error) {
     console.error('[Models] 加载模型失败:', error);
   }
@@ -49,7 +53,7 @@ function renderModels(models) {
   if (!modelSelect) return;
 
   modelSelect.innerHTML = models.map(model => `
-    <option value="${model.id}" ${model.isActive || model.published ? 'selected' : ''}>
+    <option value="${model.modelId}" ${model.isActive || model.published ? 'selected' : ''}>
       ${model.name} ${model.isActive || model.published ? '(当前)' : ''}
     </option>
   `).join('');
@@ -57,53 +61,95 @@ function renderModels(models) {
 
 /**
  * 渲染模型列表（卡片形式）
- * @param {Array} models - 模型列表
+ * @param {Array} chatModels - 对话模型列表
+ * @param {Array} embeddingModels - 嵌入模型列表
  */
-function renderModelsList(models) {
+function renderModelsList(chatModels, embeddingModels) {
   const modelsList = document.getElementById('modelsList');
   if (!modelsList) return;
 
-  modelsList.innerHTML = models.map(model => `
-    <div class="model-card" data-id="${model.id}">
-      <div class="model-card-header">
-        <h4>${model.name}</h4>
-        <span class="model-status ${model.published ? 'published' : 'unpublished'}">
-          ${model.published ? '已发布' : '未发布'}
-        </span>
-      </div>
-      <div class="model-card-body">
-        <div class="model-info-item">
-          <label>模型ID:</label>
-          <span>${model.modelId || 'N/A'}</span>
+  let html = `
+    <div class="models-section">
+      <h3 class="models-section-title">对话模型</h3>
+      ${chatModels.length === 0 ? '<p class="no-models">暂无对话模型</p>' : ''}
+      ${chatModels.map(model => `
+        <div class="model-card" data-id="${model.modelId}">
+          <div class="model-card-header">
+            <h4>${model.name}</h4>
+            <span class="model-status ${model.published ? 'published' : 'unpublished'}">
+              ${model.published ? '已发布' : '未发布'}
+            </span>
+          </div>
+          <div class="model-card-body">
+            <div class="model-info-item">
+              <label>模型ID:</label>
+              <span>${model.modelId || 'N/A'}</span>
+            </div>
+            <div class="model-info-item">
+              <label>供应商:</label>
+              <span>${model.provider || 'N/A'}</span>
+            </div>
+            <div class="model-info-item">
+              <label>协议:</label>
+              <span>${model.protocol || 'openai'}</span>
+            </div>
+            <div class="model-info-item">
+              <label>API:</label>
+              <span class="api-url">${model.url || 'N/A'}</span>
+            </div>
+          </div>
+          <div class="model-card-actions">
+            <button class="edit-model-btn" data-id="${model.modelId}">编辑</button>
+            <button class="delete-model-btn" data-id="${model.modelId}">删除</button>
+          </div>
         </div>
-        <div class="model-info-item">
-          <label>供应商:</label>
-          <span>${model.provider || 'N/A'}</span>
-        </div>
-        <div class="model-info-item">
-          <label>类型:</label>
-          <span>${model.type || 'chat'}</span>
-        </div>
-        <div class="model-info-item">
-          <label>协议:</label>
-          <span>${model.protocol || 'openai'}</span>
-        </div>
-        <div class="model-info-item">
-          <label>API:</label>
-          <span class="api-url">${model.url || 'N/A'}</span>
-        </div>
-      </div>
-      <div class="model-card-actions">
-        <button class="edit-model-btn" data-id="${model.id}">编辑</button>
-        <button class="delete-model-btn" data-id="${model.id}">删除</button>
-      </div>
+      `).join('')}
     </div>
-  `).join('');
+
+    <div class="models-section embedding-section">
+      <h3 class="models-section-title">嵌入模型</h3>
+      <p class="models-section-desc">嵌入模型用于知识库的向量化。搜索和索引时会自动使用。</p>
+      ${embeddingModels.length === 0 ? '<p class="no-models">暂无嵌入模型，将使用本地模型</p>' : ''}
+      ${embeddingModels.map(model => `
+        <div class="model-card embedding-card" data-id="${model.modelId}">
+          <div class="model-card-header">
+            <h4>${model.name}</h4>
+            <span class="model-badge embedding-badge">嵌入</span>
+          </div>
+          <div class="model-card-body">
+            <div class="model-info-item">
+              <label>模型ID:</label>
+              <span>${model.modelId || 'N/A'}</span>
+            </div>
+            <div class="model-info-item">
+              <label>供应商:</label>
+              <span>${model.provider || 'N/A'}</span>
+            </div>
+            <div class="model-info-item">
+              <label>协议:</label>
+              <span>${model.protocol || 'openai'}</span>
+            </div>
+            <div class="model-info-item">
+              <label>API:</label>
+              <span class="api-url">${model.url || 'N/A'}</span>
+            </div>
+          </div>
+          <div class="model-card-actions">
+            <button class="edit-model-btn" data-id="${model.modelId}">编辑</button>
+            <button class="delete-model-btn" data-id="${model.modelId}">删除</button>
+          </div>
+        </div>
+      `).join('')}
+    </div>
+  `;
+
+  modelsList.innerHTML = html;
 
   document.querySelectorAll('.edit-model-btn').forEach(btn => {
     btn.addEventListener('click', (e) => {
       const modelId = e.target.dataset.id;
-      openEditModelModal(modelId, models);
+      const allModels = [...chatModels, ...embeddingModels];
+      openEditModelModal(modelId, allModels);
     });
   });
 
@@ -119,14 +165,13 @@ function renderModelsList(models) {
  * 打开编辑模型模态框
  */
 function openEditModelModal(modelId, models) {
-  const model = models.find(m => m.id === modelId);
+  const model = models.find(m => m.modelId === modelId);
   if (!model) return;
 
   const modal = document.getElementById('modelModal');
   const title = document.getElementById('modelModalTitle');
   const nameInput = document.getElementById('modalModelName');
   const idInput = document.getElementById('modalModelId');
-  const typeSelect = document.getElementById('modalModelType');
   const protocolSelect = document.getElementById('modalModelProtocol');
   const urlInput = document.getElementById('modalModelUrl');
   const keyInput = document.getElementById('modalModelKey');
@@ -135,12 +180,8 @@ function openEditModelModal(modelId, models) {
 
   title.textContent = '编辑模型';
   nameInput.value = model.name || '';
-  idInput.value = model.id || '';
+  idInput.value = model.modelId || '';
   idInput.readOnly = true;
-  if (model.modelId) {
-    idInput.value = model.modelId;
-  }
-  typeSelect.value = model.type || 'chat';
   protocolSelect.value = model.protocol || 'openai';
   urlInput.value = model.url || '';
   keyInput.value = model.apiKey || '';
@@ -165,7 +206,6 @@ function getSelectedModel() {
 async function handleSaveModel() {
   const name = document.getElementById('modalModelName')?.value.trim();
   const modelId = document.getElementById('modalModelId')?.value.trim();
-  const type = document.getElementById('modalModelType')?.value || 'chat';
   const protocol = document.getElementById('modalModelProtocol')?.value || 'openai';
   const url = document.getElementById('modalModelUrl')?.value.trim();
   const apiKey = document.getElementById('modalModelKey')?.value.trim();

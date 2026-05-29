@@ -118,10 +118,17 @@ async function handleSendMessage() {
     addMessageToSession('user', message);
   }
 
-  const assistantDiv = createAssistantMessage(mode);
+  pendingContent = '';
+  currentThinking = '';
+  const assistantResult = createAssistantMessage(mode);
+  if (!assistantResult) return;
+  const { messageDiv: assistantDiv, thinkingDiv } = assistantResult;
+  assistantDiv.thinkingDiv = thinkingDiv;
   let fullResponseContent = '';
 
   try {
+    updateThinking(assistantDiv, '正在处理请求...');
+    
     const response = await fetch('/api/chat/stream', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -129,59 +136,98 @@ async function handleSendMessage() {
         message: message,
         session_id: window.currentSessionId || null,
         mode: mode,
-        group_id: groupId || null
+        group_id: groupId || null,
+        model: window.selectedModel || null
       })
     });
 
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('[Chat] HTTP错误:', response.status, errorText);
+      updateThinking(assistantDiv, `错误：HTTP ${response.status} - 服务器响应失败`);
+      return;
+    }
+
+    if (!response.body) {
+      console.error('[Chat] 响应体为空');
+      updateThinking(assistantDiv, '错误：服务器返回空响应');
+      return;
+    }
+
     const reader = response.body.getReader();
-    const decoder = new TextDecoder();
+    const decoder = new TextDecoder('utf-8');
     let buffer = '';
     let lastContent = '';
+    let startTime = Date.now();
+    let receivedData = false;
 
     while (true) {
-      const { done, value } = await reader.read();
-      if (done) {
-        if (lastContent) {
-          fullResponseContent += lastContent;
-          appendContent(assistantDiv, lastContent, true);
-          lastContent = '';
+      try {
+        const { done, value } = await reader.read();
+        
+        if (Date.now() - startTime > 120000) {
+          console.error('[Chat] 读取超时');
+          updateThinking(assistantDiv, '错误：请求超时，请稍后重试');
+          break;
+        }
+
+        if (done) {
+          if (lastContent) {
+            fullResponseContent += lastContent;
+            appendContent(assistantDiv, lastContent, true);
+            lastContent = '';
+          }
+          if (!receivedData && !fullResponseContent) {
+            updateThinking(assistantDiv, '错误：未收到任何响应数据');
+          }
+          break;
+        }
+
+        receivedData = true;
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || '';
+
+        for (const line of lines) {
+          if (line.startsWith('data: ')) {
+            const data = line.slice(6);
+            if (data === '[DONE]') continue;
+
+            try {
+              const parsed = JSON.parse(data);
+              if (parsed.type === 'thinking') {
+                updateThinking(assistantDiv, parsed.content);
+              } else if (parsed.type === 'content') {
+                lastContent = parsed.content;
+                fullResponseContent += parsed.content;
+                appendContent(assistantDiv, parsed.content, false);
+              } else if (parsed.type === 'done') {
+                finishMessage(assistantDiv);
+              }
+            } catch (e) {
+              console.error('[Chat] 解析SSE数据失败:', e);
+            }
+          }
+        }
+      } catch (readError) {
+        console.error('[Chat] 读取响应失败:', readError);
+        if (!fullResponseContent) {
+          updateThinking(assistantDiv, '错误：读取响应失败 - ' + (readError.message || '网络错误'));
         }
         break;
       }
-
-      buffer += decoder.decode(value, { stream: true });
-      const lines = buffer.split('\n');
-      buffer = lines.pop() || '';
-
-      for (const line of lines) {
-        if (line.startsWith('data: ')) {
-          const data = line.slice(6);
-          if (data === '[DONE]') continue;
-
-          try {
-            const parsed = JSON.parse(data);
-            if (parsed.type === 'thinking') {
-              updateThinking(assistantDiv, parsed.content);
-            } else if (parsed.type === 'content') {
-              lastContent = parsed.content;
-              fullResponseContent += parsed.content;
-              appendContent(assistantDiv, parsed.content, false);
-            } else if (parsed.type === 'done') {
-              finishMessage(assistantDiv);
-            }
-          } catch (e) {
-            console.error('解析SSE数据失败:', e);
-          }
-        }
-      }
-    }
-
-    if (typeof addMessageToSession === 'function' && fullResponseContent) {
-      addMessageToSession('assistant', fullResponseContent);
     }
   } catch (error) {
     console.error('[Chat] 发送消息失败:', error);
-    updateThinking(assistantDiv, '抱歉，发生了错误。请稍后重试。');
+    let errorMsg = '抱歉，发生了错误。请稍后重试。';
+    if (error.name === 'TypeError' && error.message.includes('network')) {
+      errorMsg = '网络错误：无法连接到服务器，请检查网络连接';
+    } else if (error.name === 'AbortError') {
+      errorMsg = '请求已取消';
+    } else if (error.message) {
+      errorMsg = '错误：' + error.message;
+    }
+    updateThinking(assistantDiv, errorMsg);
   } finally {
     isProcessing = false;
   }
@@ -191,9 +237,6 @@ function createAssistantMessage(mode) {
   const chatMessages = document.getElementById('chatMessages');
   if (!chatMessages) return null;
 
-  const messageDiv = document.createElement('div');
-  messageDiv.className = 'message assistant';
-
   const modeIcons = {
     'knowledge': '📚',
     'agent': '🤖',
@@ -201,38 +244,53 @@ function createAssistantMessage(mode) {
   };
   const modeIcon = modeIcons[mode] || '•';
 
+  const messageDiv = document.createElement('div');
+  messageDiv.className = 'message assistant';
+
   messageDiv.innerHTML = `
     <div class="mode-label">${modeIcon} ${mode.toUpperCase()} 模式</div>
-    <div class="message-content">
-      <div class="thinking-indicator" style="display: none;">
+    <div class="thinking-area" style="display: none;">
+      <div class="thinking-indicator">
         <span class="thinking-text"></span>
       </div>
-      <div class="content-wrapper"></div>
     </div>
+    <div class="content-wrapper" style="display: none;"></div>
   `;
 
   chatMessages.appendChild(messageDiv);
   chatMessages.scrollTop = chatMessages.scrollHeight;
 
-  return messageDiv;
+  return { messageDiv };
 }
 
 function updateThinking(messageDiv, content) {
   if (!messageDiv) return;
 
-  const thinkingIndicator = messageDiv.querySelector('.thinking-indicator');
-  const thinkingText = messageDiv.querySelector('.thinking-text');
+  currentThinking = content;
+  const thinkingArea = messageDiv.querySelector('.thinking-area');
+  if (thinkingArea) {
+    thinkingArea.style.display = 'block';
+    const thinkingText = thinkingArea.querySelector('.thinking-text');
+    if (thinkingText) {
+      if (!thinkingArea.classList.contains('thinking-complete')) {
+        thinkingText.textContent = content;
+      }
+    }
 
-  if (thinkingIndicator && thinkingText) {
-    thinkingIndicator.style.display = 'block';
-    thinkingText.textContent = content;
+    if (!thinkingArea.classList.contains('thinking-complete') && content.includes('✅')) {
+      thinkingArea.classList.add('thinking-complete');
+      thinkingArea.classList.add('expanded');
+      thinkingArea.addEventListener('click', () => {
+        thinkingArea.classList.toggle('expanded');
+      });
+    }
   }
-
   scrollChatToBottom();
 }
 
 let pendingContent = '';
 let currentCodeBlock = null;
+let currentThinking = '';
 
 function scrollChatToBottom() {
   if (!isFollowing) return;
@@ -245,18 +303,17 @@ function scrollChatToBottom() {
 function appendContent(messageDiv, content, isFinal = false) {
   if (!messageDiv) return;
 
-  const thinkingIndicator = messageDiv.querySelector('.thinking-indicator');
   const contentWrapper = messageDiv.querySelector('.content-wrapper');
 
-  if (thinkingIndicator) {
-    thinkingIndicator.style.display = 'none';
-  }
-
   if (contentWrapper) {
+    if (!contentWrapper.style.display || contentWrapper.style.display === 'none') {
+      contentWrapper.style.display = 'inline-block';
+    }
     pendingContent += content;
     contentWrapper.innerHTML = renderStreamingMarkdown(pendingContent, isFinal);
-    contentWrapper.dataset.content = pendingContent;
   }
+
+  messageDiv.dataset.content = pendingContent;
 
   scrollChatToBottom();
 }
@@ -264,11 +321,23 @@ function appendContent(messageDiv, content, isFinal = false) {
 function finishMessage(messageDiv) {
   if (!messageDiv) return;
 
-  const thinkingIndicator = messageDiv.querySelector('.thinking-indicator');
-  if (thinkingIndicator) {
-    thinkingIndicator.style.display = 'none';
+  const thinkingArea = messageDiv.querySelector('.thinking-area');
+  if (thinkingArea && !thinkingArea.classList.contains('thinking-complete')) {
+    thinkingArea.classList.add('thinking-complete');
+    thinkingArea.addEventListener('click', () => {
+      thinkingArea.classList.toggle('expanded');
+    });
   }
 
+  const finalContent = messageDiv.dataset.content || '';
+  if (finalContent && typeof addMessageToSession === 'function') {
+    const thinkingToSave = currentThinking || '';
+    addMessageToSession('assistant', finalContent, { thinking: thinkingToSave }).catch(err => {
+      console.error('保存思考过程失败:', err);
+    });
+  }
+
+  currentThinking = '';
   currentCodeBlock = null;
   scrollChatToBottom();
 }

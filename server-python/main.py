@@ -10,7 +10,7 @@ import re
 from config import PORT, HOST, KNOWLEDGE_DIR, TEMP_DIR, get_settings
 from routers import chat, session, model, file
 from routers.health import router as health_router
-from skills import skills_router
+from routers.skills_router import router as skills_router
 from middleware.logging import log_requests, error_handler
 from middleware.security import SecurityMiddleware, RateLimiter
 
@@ -47,7 +47,7 @@ app.include_router(chat.router, prefix="/api/chat", tags=["Chat"])
 app.include_router(session.router, prefix="/api/chat/sessions", tags=["Session"])
 app.include_router(model.router, prefix="/api/models", tags=["Model"])
 app.include_router(file.router, prefix="/api/files", tags=["File"])
-app.include_router(skills_router, prefix="/api/skills", tags=["Skills"])
+app.include_router(skills_router, tags=["Skills"])
 app.include_router(health_router, tags=["Health"])
 
 
@@ -69,41 +69,6 @@ async def api_health():
     return {"status": "ok"}
 
 
-@app.get("/api/skills")
-async def get_skills():
-    return {
-        "success": True,
-        "skills": [
-            {"name": "天气查询", "description": "查询天气信息", "category": "info", "tools": ["weather_query"]},
-            {"name": "知识库检索", "description": "搜索知识库", "category": "knowledge", "tools": ["knowledge_search"]},
-            {"name": "Web搜索", "description": "搜索互联网", "category": "search", "tools": ["web_search"]},
-        ],
-        "skillsByCategory": {
-            "info": [{"name": "天气查询", "tools": ["weather_query"]}],
-            "knowledge": [{"name": "知识库检索", "tools": ["knowledge_search"]}],
-            "search": [{"name": "Web搜索", "tools": ["web_search"]}],
-        },
-        "toolsWithDescriptions": {
-            "weather_query": "查询指定城市的天气信息",
-            "knowledge_search": "搜索知识库中的相关内容",
-            "web_search": "搜索互联网上的信息",
-        },
-        "supportedExtensions": [".txt", ".md", ".pdf", ".jpg", ".jpeg", ".png"]
-    }
-
-
-@app.post("/api/skills/process")
-async def process_skill(request: Request):
-    body = await request.json()
-    return {"success": True, "result": "Skill processing not fully implemented in Python version"}
-
-
-@app.post("/api/skills/process-multiple")
-async def process_multiple_skills(request: Request):
-    body = await request.json()
-    return {"success": True, "result": "Batch processing not fully implemented in Python version"}
-
-
 @app.get("/api/knowledge/index-status")
 async def get_index_status():
     from services.vector_store import get_index_stats, init_vector_store
@@ -121,11 +86,15 @@ async def reindex_knowledge(background_tasks: BackgroundTasks, group_id: str = N
 
     def do_reindex():
         from services.vector_store import index_knowledge_base, init_vector_store
+
+        def progress_callback(msg):
+            _reindex_status["progress"] = msg
+
         _reindex_status["running"] = True
         _reindex_status["progress"] = "正在初始化..."
         init_vector_store()
         _reindex_status["progress"] = "正在索引文件..."
-        result = asyncio.run(index_knowledge_base(group_id))
+        result = asyncio.run(index_knowledge_base(group_id, progress_callback))
         _reindex_status["running"] = False
         _reindex_status["result"] = result
         _reindex_status["progress"] = "完成"

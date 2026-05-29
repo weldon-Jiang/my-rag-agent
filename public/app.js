@@ -276,8 +276,24 @@ function handlePageNavigation(page, sessionId = null, isInitial = false) {
   } else if (page === 'models') {
     loadModels();
   } else if (page === 'skill-tools') {
-    setupSkillToolsTabs();
-    loadSkillTools();
+    console.log('[App] skill-tools 导航, window.skillToolsPage:', window.skillToolsPage);
+    if (window.skillToolsPage && typeof window.skillToolsPage.init === 'function') {
+      console.log('[App] 调用 skillToolsPage.init()');
+      window.skillToolsPage.init();
+    } else {
+      console.log('[App] skillToolsPage 模块未就绪，尝试加载模块');
+      if (typeof router !== 'undefined' && router.loadPageModule) {
+        router.loadPageModule('skill-tools').then(module => {
+          console.log('[App] 模块已加载:', module);
+          window.skillToolsPage = module;
+          if (module && module.init) {
+            module.init();
+          }
+        }).catch(err => {
+          console.error('[App] 模块加载失败:', err);
+        });
+      }
+    }
   }
 }
 
@@ -586,8 +602,9 @@ function navigateTo(page) {
     } else if (page === 'models') {
         loadModels();
     } else if (page === 'skill-tools') {
-        setupSkillToolsTabs();
-        loadSkillTools();
+        if (window.skillToolsPage && window.skillToolsPage.init) {
+            window.skillToolsPage.init();
+        }
     }
 }
 
@@ -1006,9 +1023,18 @@ async function loadModels() {
         const allModels = await response.json();
         currentModels = allModels;
 
+        const embeddingResponse = await fetch(`${API_BASE}/api/models/embedding`);
+        const embeddingModel = await embeddingResponse.json();
+        const embeddingModelId = embeddingModel?.id || null;
+
         const publishedResponse = await fetch(`${API_BASE}/api/models/published`);
         const publishedModels = await publishedResponse.json();
-        const publishedIds = publishedModels.map(m => m.id);
+
+        let chatModels = publishedModels;
+        if (embeddingModelId) {
+            chatModels = publishedModels.filter(m => m.modelId !== embeddingModelId);
+        }
+        const publishedIds = chatModels.map(m => m.modelId);
 
         const currentModelResponse = await fetch(`${API_BASE}/api/models/current`);
         const currentModel = await currentModelResponse.json();
@@ -1020,8 +1046,10 @@ async function loadModels() {
 
         if (modelFromUrl && publishedIds.includes(modelFromUrl)) {
             selectedModel = modelFromUrl;
+            window.selectedModel = modelFromUrl;
         } else if (!selectedModel || !publishedIds.includes(selectedModel)) {
-            selectedModel = currentModel?.id || (publishedModels.length > 0 ? publishedModels[0].id : null);
+            selectedModel = currentModel?.modelId || currentModel?.id || (chatModels.length > 0 ? chatModels[0].modelId : null);
+            window.selectedModel = selectedModel;
             if (selectedModel && isChatPage) {
                 urlParams.set('model', selectedModel);
                 const newUrl = `${window.location.pathname}?${urlParams.toString()}`;
@@ -1036,8 +1064,8 @@ async function loadModels() {
             window.history.replaceState({}, '', newUrl);
         }
 
-        renderModelsList();
-        renderModelSelect(currentModels);
+        renderModelsList(embeddingModelId);
+        renderModelSelect(chatModels);
         updateUploadButtonState();
     } catch (error) {
         console.error('加载模型失败:', error);
@@ -1076,11 +1104,12 @@ function renderModelSelect(publishedModels) {
     `;
 
     publishedModels.forEach(model => {
+        const modelId = model.modelId || model.id;
         html += `
-            <div class="model-option ${model.id === selectedModel ? 'selected' : ''}"
-                 onclick="selectModel('${model.id}')">
-                <input type="radio" name="model" value="${model.id}"
-                       ${model.id === selectedModel ? 'checked' : ''}>
+            <div class="model-option ${modelId === selectedModel ? 'selected' : ''}"
+                 onclick="selectModel('${modelId}')">
+                <input type="radio" name="model" value="${modelId}"
+                       ${modelId === selectedModel ? 'checked' : ''}>
                 <span>${model.name}</span>
             </div>
         `;
@@ -1114,6 +1143,7 @@ function toggleModelDropdown() {
  */
 function selectModel(modelId) {
     selectedModel = modelId;
+    window.selectedModel = modelId;
     const modelName = getSelectedModelName();
     const nameSpan = document.getElementById('selectedModelName');
     if (nameSpan) {
@@ -1152,56 +1182,116 @@ function selectModel(modelId) {
  * @returns {string} 模型名称
  */
 function getSelectedModelName() {
-    const model = currentModels.find(m => m.id === selectedModel);
+    const model = currentModels.find(m => m.modelId === selectedModel || m.id === selectedModel);
     return model ? model.name : '请选择模型';
 }
 
 /**
  * 渲染模型列表到页面
- * @description 将模型数组渲染为卡片列表,显示模型的详细信息和操作按钮
+ * @param {string|null} embeddingModelId - 当前嵌入模型ID
  */
-function renderModelsList() {
+function renderModelsList(embeddingModelId) {
     const list = document.getElementById('modelsList');
     if (!list) return;
 
     list.innerHTML = '';
 
-    currentModels.forEach(model => {
-        const card = document.createElement('div');
-        card.className = 'model-card';
+    const chatModels = embeddingModelId
+        ? currentModels.filter(m => m.id !== embeddingModelId)
+        : currentModels;
+
+    const embeddingModel = embeddingModelId
+        ? currentModels.find(m => m.id === embeddingModelId)
+        : null;
+
+    let html = `
+        <div class="models-section">
+            <h3 class="models-section-title">对话模型</h3>
+            ${chatModels.length === 0 ? '<p class="no-models">暂无对话模型</p>' : ''}
+    `;
+
+    chatModels.forEach(model => {
         const isPublished = model.published !== false;
         const publishedText = isPublished ? '已发布' : '未发布';
         const publishedClass = isPublished ? 'published' : 'unpublished';
         const toggleBtnText = isPublished ? '下架' : '发布';
         const multimodalText = model.supports_multimodal ? '✅ 支持图片' : '❌ 不支持图片';
         const multimodalClass = model.supports_multimodal ? 'multimodal-yes' : 'multimodal-no';
-        const isDefault = model.id === selectedModel;
+        const isDefault = model.modelId === selectedModel;
         const defaultBadge = isDefault ? '<span class="default-badge">默认</span>' : '';
-        const setDefaultBtn = isDefault ? '' : '<button class="set-default-btn" onclick="setDefaultModel(\'' + model.id + '\')">设为默认</button>';
+        const setDefaultBtn = isDefault ? '' : '<button class="set-default-btn" onclick="setDefaultModel(\'' + model.modelId + '\')">设为默认</button>';
+        const setEmbeddingBtn = '<button class="set-embedding-btn" onclick="setEmbeddingModel(\'' + model.modelId + '\')">设为嵌入模型</button>';
 
-        card.innerHTML = `
-            <div class="model-card-header">
-                <div class="model-card-name">${model.name} ${defaultBadge}</div>
-                <div class="model-card-actions">
-                    ${setDefaultBtn}
-                    <button class="toggle-btn" onclick="toggleModelPublished('${model.id}')">${toggleBtnText}</button>
-                    <button class="edit-btn" onclick="editModel('${model.id}')">编辑</button>
-                    <button class="delete-btn" onclick="deleteModel('${model.id}')">删除</button>
+        html += `
+            <div class="model-card" data-id="${model.id}">
+                <div class="model-card-header">
+                    <div class="model-card-name">${model.name} ${defaultBadge}</div>
+                    <div class="model-card-actions">
+                        ${setDefaultBtn}
+                        ${setEmbeddingBtn}
+                        <button class="toggle-btn" onclick="toggleModelPublished('${model.modelId}')">${toggleBtnText}</button>
+                        <button class="edit-btn" onclick="editModel('${model.modelId}')">编辑</button>
+                        <button class="delete-btn" onclick="deleteModel('${model.modelId}')">删除</button>
+                    </div>
+                </div>
+                <div class="model-card-details">
+                    <div><strong>模型ID:</strong> ${model.modelId}</div>
+                    <div><strong>供应商:</strong> ${model.provider || ''}</div>
+                    <div><strong>协议:</strong> ${model.protocol || 'openai'}</div>
+                    <div><strong>图片:</strong> <span class="${multimodalClass}">${multimodalText}</span></div>
+                    <div><strong>状态:</strong> <span class="publish-status ${publishedClass}">${publishedText}</span></div>
+                    ${model.url ? `<div><strong>URL:</strong> ${model.url}</div>` : ''}
+                    ${model.apiKey ? `<div><strong>密钥:</strong> ${'*'.repeat(model.apiKey.length)}</div>` : ''}
                 </div>
             </div>
-            <div class="model-card-details">
-                <div><strong>模型ID:</strong> ${model.modelId || model.id}</div>
-                <div><strong>供应商:</strong> ${model.provider}</div>
-                <div><strong>类型:</strong> ${model.type || 'chat'}</div>
-                <div><strong>协议:</strong> ${model.protocol || 'openai'}</div>
-                <div><strong>图片:</strong> <span class="${multimodalClass}">${multimodalText}</span></div>
-                <div><strong>状态:</strong> <span class="publish-status ${publishedClass}">${publishedText}</span></div>
-                ${model.url ? `<div><strong>URL:</strong> ${model.url}</div>` : ''}
-                ${model.apiKey ? `<div><strong>密钥:</strong> ${'*'.repeat(model.apiKey.length)}</div>` : ''}
+        `;
+    });
+
+    html += `
+        </div>
+        <div class="models-section embedding-section">
+            <h3 class="models-section-title">嵌入模型</h3>
+            <p class="models-section-desc">嵌入模型用于知识库的向量化。搜索和索引时会自动使用。</p>
+    `;
+
+    if (embeddingModel) {
+        const isPublished = embeddingModel.published !== false;
+        const publishedText = isPublished ? '已发布' : '未发布';
+        const publishedClass = isPublished ? 'published' : 'unpublished';
+        const toggleBtnText = isPublished ? '下架' : '发布';
+
+        html += `
+            <div class="model-card embedding-card" data-id="${embeddingModel.id}">
+                <div class="model-card-header">
+                    <div class="model-card-name">${embeddingModel.name}</div>
+                    <span class="model-badge embedding-badge">嵌入</span>
+                    <div class="model-card-actions">
+                        <button class="remove-embedding-btn" onclick="removeEmbeddingModel()">移除嵌入</button>
+                        <button class="toggle-btn" onclick="toggleModelPublished('${embeddingModel.modelId}')">${toggleBtnText}</button>
+                        <button class="edit-btn" onclick="editModel('${embeddingModel.modelId}')">编辑</button>
+                    </div>
+                </div>
+                <div class="model-card-details">
+                    <div><strong>模型ID:</strong> ${embeddingModel.modelId}</div>
+                    <div><strong>供应商:</strong> ${embeddingModel.provider || ''}</div>
+                    <div><strong>协议:</strong> ${embeddingModel.protocol || 'openai'}</div>
+                    <div><strong>状态:</strong> <span class="publish-status ${publishedClass}">${publishedText}</span></div>
+                    ${embeddingModel.url ? `<div><strong>URL:</strong> ${embeddingModel.url}</div>` : ''}
+                    ${embeddingModel.apiKey ? `<div><strong>密钥:</strong> ${'*'.repeat(embeddingModel.apiKey.length)}</div>` : ''}
+                </div>
             </div>
         `;
-        list.appendChild(card);
-    });
+    } else {
+        html += `
+            <div class="no-embedding-model">
+                <p>暂无嵌入模型，请在上方选择一个模型点击"设为嵌入模型"</p>
+                <p class="embedding-hint">未配置嵌入模型时，系统将使用本地模型 all-MiniLM-L6-v2</p>
+            </div>
+        `;
+    }
+
+    html += '</div>';
+    list.innerHTML = html;
 }
 
 /**
@@ -1239,7 +1329,6 @@ function openAddModelModal() {
     document.getElementById('modalModelKey').value = '';
     document.getElementById('modalModelProvider').value = '';
     document.getElementById('modalModelPublished').checked = true;
-    document.getElementById('modalModelType').value = 'chat';
     document.getElementById('modalModelProtocol').value = 'openai';
     document.getElementById('modalModelMultimodal').checked = false;
     document.getElementById('modalModelId').readOnly = false;
@@ -1252,12 +1341,11 @@ function openAddModelModal() {
  * @param {Object} model - 要编辑的模型对象
  */
 function openEditModelModal(model) {
-    editingModelId = model.id;
+    editingModelId = model.modelId;
     document.getElementById('modelModalTitle').textContent = '编辑模型';
     document.getElementById('modalModelName').value = model.name || '';
-    document.getElementById('modalModelId').value = model.modelId || model.id || '';
+    document.getElementById('modalModelId').value = model.modelId || '';
     document.getElementById('modalModelId').readOnly = true;
-    document.getElementById('modalModelType').value = model.type || 'chat';
     document.getElementById('modalModelProtocol').value = model.protocol || 'openai';
     document.getElementById('modalModelMultimodal').checked = model.supports_multimodal || false;
     document.getElementById('modalModelUrl').value = model.url || '';
@@ -1361,7 +1449,6 @@ async function saveModelFromModal() {
         url: document.getElementById('modalModelUrl').value.trim(),
         apiKey: document.getElementById('modalModelKey').value.trim(),
         provider: document.getElementById('modalModelProvider').value.trim(),
-        type: document.getElementById('modalModelType').value || 'chat',
         protocol: document.getElementById('modalModelProtocol').value || 'openai',
         supports_multimodal: document.getElementById('modalModelMultimodal').checked,
         published: document.getElementById('modalModelPublished').checked
@@ -1370,7 +1457,7 @@ async function saveModelFromModal() {
     try {
         let response;
         if (editingModelId) {
-            response = await fetch(`${API_BASE}/api/models/${editingModelId}/`, {
+            response = await fetch(`${API_BASE}/api/models/${editingModelId}`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(modelData)
@@ -1402,7 +1489,7 @@ async function saveModelFromModal() {
  * @param {string} modelId - 模型ID
  */
 function editModel(modelId) {
-    const model = currentModels.find(m => m.id === modelId);
+    const model = currentModels.find(m => m.modelId === modelId);
     if (!model) return;
     openEditModelModal(model);
 }
@@ -1416,13 +1503,14 @@ async function deleteModel(modelId) {
     if (!confirm('确定要删除此模型吗？')) return;
 
     try {
-        const response = await fetch(`${API_BASE}/api/models/${modelId}/`, {
+        const response = await fetch(`${API_BASE}/api/models/${modelId}`, {
             method: 'DELETE'
         });
 
         if (response.ok) {
             if (selectedModel === modelId) {
-                selectedModel = currentModels.find(m => m.id !== modelId)?.id;
+                selectedModel = currentModels.find(m => m.modelId !== modelId)?.modelId;
+                window.selectedModel = selectedModel;
             }
             loadModels();
         }
@@ -1442,7 +1530,7 @@ async function toggleModelPublished(modelId) {
     const newPublished = model.published === false;
 
     try {
-        const response = await fetch(`${API_BASE}/api/models/${modelId}/`, {
+        const response = await fetch(`${API_BASE}/api/models/${modelId}`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ published: newPublished })
@@ -1471,12 +1559,59 @@ async function setDefaultModel(modelId) {
         if (response.ok) {
             const result = await response.json();
             selectedModel = modelId;
-            loadModels();
-            renderModelSelect(currentModels);
+            window.selectedModel = modelId;
+            await loadModels();
             alert(result.message || '默认模型已设置');
         }
     } catch (error) {
         console.error('设置默认模型失败:', error);
+    }
+}
+
+/**
+ * 设置嵌入模型
+ * @param {string} modelId - 模型ID
+ */
+async function setEmbeddingModel(modelId) {
+    try {
+        const response = await fetch(`${API_BASE}/api/models/set-embedding`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ model_id: modelId })
+        });
+
+        if (response.ok) {
+            const result = await response.json();
+            loadModels();
+            alert(result.message || '嵌入模型已设置');
+        } else {
+            const error = await response.json();
+            alert('设置失败: ' + (error.detail || '未知错误'));
+        }
+    } catch (error) {
+        console.error('设置嵌入模型失败:', error);
+        alert('设置嵌入模型失败: ' + error.message);
+    }
+}
+
+/**
+ * 移除嵌入模型
+ */
+async function removeEmbeddingModel() {
+    try {
+        const response = await fetch(`${API_BASE}/api/models/set-embedding`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ model_id: '' })
+        });
+
+        if (response.ok) {
+            loadModels();
+            alert('已移除嵌入模型，将使用本地模型');
+        }
+    } catch (error) {
+        console.error('移除嵌入模型失败:', error);
+        alert('移除嵌入模型失败: ' + error.message);
     }
 }
 
@@ -1711,8 +1846,9 @@ async function sendMessage() {
  * @param {string} source - 来源
  * @param {Array} toolResults - 工具结果数组
  * @param {Array} attachments - 附件列表
+ * @param {string} thinking - 思考内容
  */
-function addMessage(content, role, source = '', toolResults = [], attachments = []) {
+function addMessage(content, role, source = '', toolResults = [], attachments = [], thinking = '') {
     const chatMessages = document.getElementById('chatMessages');
     const messageDiv = document.createElement('div');
     messageDiv.className = `message ${role}`;
@@ -1777,7 +1913,18 @@ function addMessage(content, role, source = '', toolResults = [], attachments = 
     
     let messageHtml = '';
     if (thinkContent) {
-        messageHtml += `<div class="message-think"><div class="think-label">思考中...</div>${escapeHtml(thinkContent)}</div>`;
+        messageHtml += `<div class="thinking-area">
+            <div class="thinking-indicator">
+                <span class="thinking-text">🧠 ${escapeHtml(thinkContent)}</span>
+            </div>
+        </div>`;
+    }
+    if (thinking) {
+        messageHtml += `<div class="thinking-area thinking-complete ${thinking.length > 100 ? '' : 'expanded'}" onclick="this.classList.toggle('expanded');">
+            <div class="thinking-indicator">
+                <span class="thinking-text">${escapeHtml(thinking)}</span>
+            </div>
+        </div>`;
     }
     if (imageHtml) {
         messageHtml += imageHtml;
@@ -1795,7 +1942,7 @@ function addMessage(content, role, source = '', toolResults = [], attachments = 
         ${messageHtml}
         ${sourceHtml}
     `;
-    
+
     chatMessages.appendChild(messageDiv);
     chatMessages.scrollTop = chatMessages.scrollHeight;
 }
@@ -2057,13 +2204,13 @@ function loadSessionMessages(sessionId) {
             if (msg.isClarificationResponse) {
                 const clarificationHtml = `
                     <div class="message user">
-                        <div class="message-content">
+                        <div class="content-wrapper">
                             <div class="clarification-response">${escapeHtml(msg.content)}</div>
                         </div>
                     </div>
                     ${msg.finalResponse ? `
                     <div class="message assistant">
-                        <div class="message-content">
+                        <div class="content-wrapper">
                             ${escapeHtml(msg.finalResponse)}
                         </div>
                     </div>
@@ -2108,7 +2255,7 @@ function loadSessionMessages(sessionId) {
                 const clarificationHtml = `
                     <div class="message assistant">
                         ${modeLabel ? `<div class="mode-label">${modeLabel}</div>` : ''}
-                        <div class="message-content">
+                        <div class="content-wrapper">
                             <div class="clarification-question">${escapeHtml(msg.content)}</div>
                             ${optionsHtml}
                         </div>
@@ -2127,15 +2274,30 @@ function loadSessionMessages(sessionId) {
                     };
                     const modeIcon = modeIcons[msg.source] || '';
                     const modeLabel = msg.source ? `${modeIcon} ${msg.source.toUpperCase()} 模式` : '';
+
+                    if (msg.thinking) {
+                        const thinkingDiv = document.createElement('div');
+                        thinkingDiv.className = 'thinking-area thinking-complete';
+                        thinkingDiv.innerHTML = `
+                            <div class="thinking-indicator">
+                                <span class="thinking-text">${escapeHtml(msg.thinking)}</span>
+                            </div>
+                        `;
+                        thinkingDiv.onclick = function() {
+                            this.classList.toggle('expanded');
+                        };
+                        chatMessages.appendChild(thinkingDiv);
+                    }
+
                     const msgDiv = document.createElement('div');
                     msgDiv.className = 'message assistant';
                     msgDiv.innerHTML = `
                         ${modeLabel ? `<div class="mode-label">${modeLabel}</div>` : ''}
-                        <div class="message-content">${renderedContent}</div>
+                        <div class="content-wrapper">${renderedContent}</div>
                     `;
                     chatMessages.appendChild(msgDiv);
                 } else {
-                    addMessage(msg.content, msg.source || 'assistant', msg.source, msg.knowledgeResults);
+                    addMessage(msg.content, msg.source || 'assistant', msg.source, msg.knowledgeResults, [], msg.thinking);
                 }
             }
         }
@@ -2334,7 +2496,7 @@ function handleClarification(data) {
             `;
         }
 
-        messageDiv.innerHTML = `<div class="message-content clarification-content">${optionsHtml}</div>`;
+        messageDiv.innerHTML = `<div class="content-wrapper clarification-content">${optionsHtml}</div>`;
 
         chatMessages.appendChild(messageDiv);
         chatMessages.scrollTop = chatMessages.scrollHeight;
